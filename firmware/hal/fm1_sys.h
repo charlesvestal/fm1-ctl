@@ -18,6 +18,7 @@
 #pragma once
 #include <stdint.h>
 #include "fm1_cc.h"
+#include "fm1_time.h"
 
 #define FM1_P33_CON (*(volatile uint32_t *)0x13E08u)
 #define FM1_P33_DAT (*(volatile uint32_t *)0x13E0Cu)
@@ -91,6 +92,36 @@ static void fm1_wdt_arm(uint8_t t)
 }
 static void fm1_wdt_feed(void) { fm1_p33_or(FM1_P3_WDT_CON, 0x40); }
 static void fm1_wdt_stop(void) { fm1_p33_write(FM1_P3_WDT_CON, 0); }
+
+/* Ctl: the watchdog feed and a busy wait with nothing called, for RAM-resident code (.ram_text). The radio
+ * trim (JieLi's, ~500 ms of high current) must not touch the flash, and its delays run here. */
+FM1_INLINE void fm1__p33_xfer_inl(uint8_t b)
+{
+    uint32_t n = 100000u;
+    FM1_P33_DAT = b;
+    FM1_P33_CON |= 1u << 4;
+    (void)FM1_P33_CON;
+    while ((FM1_P33_CON & (1u << 1)) && --n)
+        ;
+}
+FM1_INLINE void fm1_wdt_feed_inl(void)            /* fm1_wdt_feed: P33 "or" WDT_CON, 0x40 */
+{
+    FM1_P33_CON &= ~(1u << 8);
+    FM1_P33_CON |= 1u << 0;
+    fm1__p33_xfer_inl((uint8_t)((1u << 5) | ((FM1_P3_WDT_CON >> 8) & 3u)));
+    fm1__p33_xfer_inl((uint8_t)FM1_P3_WDT_CON);
+    fm1__p33_xfer_inl(0x40);
+    FM1_P33_CON &= ~((1u << 0) | (1u << 8));
+}
+FM1_INLINE void fm1_busy_us_inl(uint32_t us)      /* TIMER4; the watchdog fed every millisecond */
+{
+    uint32_t t0 = FM1_T4_CNT, fed = t0, span = us * FM1_TICKS_PER_US;
+    while ((uint32_t)(FM1_T4_CNT - t0) < span)
+        if ((uint32_t)(FM1_T4_CNT - fed) >= 1000u * FM1_TICKS_PER_US) {
+            fed = FM1_T4_CNT;
+            fm1_wdt_feed_inl();
+        }
+}
 
 /* ---------------------------------------------------- reset and reboot --- */
 static struct {

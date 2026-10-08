@@ -36,6 +36,8 @@ void shim_idle(void)
     }
 }
 void shim_reboot(void) { fm1_reboot(); }
+/* the shim's delays (JieLi's delay_us and friends): from RAM, timed by TIMER4, nothing called */
+__attribute__((section(".ram_text"), noinline, used)) void shim_delay_us(uint32_t us) { fm1_busy_us_inl(us); }
 
 
 /* the radio's interrupts sit above the input timer (4): JieLi asks for 0..2, mapped to 5..7 */
@@ -188,6 +190,13 @@ static void ble_boot_note(void)
 {
     char b[40];
     uint32_t v[4];
+    if (fm1_crash.magic == FM1_CRASH_MAGIC && (blog.magic != BLE_LOG_MAGIC || blog.w > 100000u)) {
+        blog.magic = BLE_LOG_MAGIC;               /* a crash with Bluetooth never started: note it too */
+        blog.w = blog.count = blog.running = blog.probe = blog.t0_up = 0;
+        blog.crash_seen = fm1_crash.count - 1u;
+        memset(blog.ana, 0, sizeof blog.ana);
+        memset(blog.pnd_seen, 0, sizeof blog.pnd_seen);
+    }
     if (blog.magic != BLE_LOG_MAGIC || blog.w > 100000u)
         return;
     if (fm1_crash.magic == FM1_CRASH_MAGIC && fm1_crash.count != blog.crash_seen) {

@@ -579,21 +579,17 @@ static void draw_ble(void)
                       s == BLE_STARTING ? "Starting" : s == BLE_FAILED ? "Failed" : "Off";
     cv_text(12, 2, &FONT_B, big, plat_ble_connected() ? K_COOL : K_TEXT);
     if (s == BLE_OFF) {
-        cv_text(12, 28, &FONT_XS, "KNOB 1 starts Bluetooth MIDI.", K_DIM);
-        cv_text(12, 44, &FONT_XS, "It stays on until a restart.", K_DIM);
+        cv_text(12, 22, &FONT_XS, "KNOB 1 starts it, until a restart", K_DIM);
     } else {
-        cv_text(12, 28, &FONT_XS, "Name: FM-1", K_DIM);
-        {
-            char *b = put_u(put_s(t, "in "), ui.n_in[PORT_BLE]);
-            put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);
-        }
-        cv_text(132, 28, &FONT_XS, t, K_DIM);
+        char *b = put_u(put_s(t, "Name: FM-1    in "), ui.n_in[PORT_BLE]);
+        put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);
+        cv_text(12, 22, &FONT_XS, t, K_DIM);
     }
-    n = (int)plat_ble_log_total();       /* the log: the newest last (kept through a reset) */
-    if (n > 5)
-        n = 5;
+    n = (int)plat_ble_log_total();       /* the log, the newest last (kept through a reset): seven lines, */
+    if (n > 7)                           /* the whole crash note */
+        n = 7;
     for (i = 0; i < n; i++)
-        cv_text(12, 62 + (4 - (n - 1 - i)) * 16, &FONT_XS, plat_ble_log_line(n - 1 - i), K_DIM);
+        cv_text(8, 40 + (6 - (n - 1 - i)) * 14, &FONT_XS, plat_ble_log_line(n - 1 - i), K_DIM);
 }
 
 static void draw_main(void)
@@ -609,7 +605,7 @@ static void draw_main(void)
     h = hash(h, (uint32_t)plat_ble_state() | (uint32_t)plat_ble_connected() << 4);
     if (ui.view == V_BLE) {
         h = hash(hash(h, plat_ble_log_total()), ui.n_in[PORT_BLE] ^ ui.n_out[PORT_BLE] << 16);
-        for (i = 0; i < 5; i++)
+        for (i = 0; i < 7; i++)
             h = hash_s(h, plat_ble_log_line(i));
     }
     if (h == ui.sig[1])

@@ -356,23 +356,14 @@ int power_is_poweroff_post(void) { return 0; }
 void P33_SYSTEM_RESET(void) { shim_reboot(); }
 u32 clk_get(const char *name) { (void)name; return 24000000u; }   /* the radio asks for "osc" */
 
-static void busy_us(u32 us)
-{
-    uint32_t n;
-    volatile uint32_t k;
-    for (n = 0; n < us; n++) {                     /* ~1 us at the AC79's clock; refined on the device */
-        for (k = 0; k < 40u; k++)
-            ;
-        if (!(n & 1023u))
-            shim_wdt();                            /* the radio's calibration loops on delays for seconds */
-    }
-}
 /* diagnostics: who last asked for a delay (ble.c shows it after a crash) */
 extern volatile uint32_t shim_delay_from, shim_delay_n;
 #define NOTE_CALLER() (shim_delay_from = (uint32_t)(uintptr_t)__builtin_return_address(0), shim_delay_n++)
-void delay(u32 n) { NOTE_CALLER(); busy_us(n); }
-void delay_us(u32 us) { NOTE_CALLER(); busy_us(us); }
-void hw_udelay(u32 us) { NOTE_CALLER(); busy_us(us); }
+/* in RAM, as the radio trim that calls them (app.ld): no flash access while it draws its current */
+#define SHIM_RAMFN __attribute__((section(".ram_text"), noinline, used))
+SHIM_RAMFN void delay(u32 n) { NOTE_CALLER(); shim_delay_us(n); }
+SHIM_RAMFN void delay_us(u32 us) { NOTE_CALLER(); shim_delay_us(us); }
+SHIM_RAMFN void hw_udelay(u32 us) { NOTE_CALLER(); shim_delay_us(us); }
 void adc_add_sample_ch(u32 ch) { (void)ch; }
 u32 adc_get_value(u32 ch) { (void)ch; return 0; }
 void aes_hw_lock(void) {}

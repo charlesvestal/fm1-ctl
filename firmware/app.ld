@@ -18,15 +18,18 @@ MEMORY
 }
 SECTIONS
 {
-    /* BLE experiment: JieLi's BT code and constants run from XIP, as in their SDK (sdk_ld_sfc.c);
-     * only .volatile_ram_code must be in RAM */
+    /* JieLi's BT code and constants run from XIP, as in their SDK (sdk_ld_sfc.c); .volatile_ram_code
+     * and the radio trim (*.rf_trim, CONFIG_RF_TRIM_CODE_AT_RAM in their demos) run from RAM: the trim
+     * draws ~500 ms of high current, and fetching from the flash meanwhile corrupts what is read
+     * (the crashes 0.7 s into every BT start, fm1-ble notes/03-05) */
     .text : { KEEP(*(.text.crt0)) *(.text*) *(.rodata*)
               *(.bt_stack_code .ble_sm_code .hci_controller_code .ble_hci_code .ble_att_code .ble_db_code
                 .classic_lmp_code .link_bulk_code .classic_rf_code .lmp_irq_code .ble_gatt_code .ble_ll_code
                 .ble_rf_code .bt_rf_code .hci_interface_code .vendor_manager_code .device_manager_code)
-              *(*.rf.text.cache.L2.rf_trim) *(.*_const)
+              *(.*_const)
               . = ALIGN(4); _etext = .; } > XIP
-    .ram_text : { _rt_start = .; KEEP(*(.ram_text*)) *(.volatile_ram_code) . = ALIGN(4); _rt_end = .; } > RAMTEXT AT > XIP
+    .ram_text : { _rt_start = .; KEEP(*(.ram_text*)) *(.volatile_ram_code) *(*.rf.text.cache.L2.rf_trim)
+                  . = ALIGN(4); _rt_end = .; } > RAMTEXT AT > XIP
     _rt_load = LOADADDR(.ram_text);
     .data : { . = ALIGN(4); _data_start = .; *(.data*) *(.sdata*) *(.*_data) . = ALIGN(4); _data_end = .; } > RAM AT > XIP
     _data_load = LOADADDR(.data);

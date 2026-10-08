@@ -39,6 +39,7 @@ void shim_idle(void);                 /* the main loop has nothing to run: retur
 void shim_request_irq(int index, int prio, void (*handler)(void));
 void shim_reboot(void);
 void shim_wdt(void);                  /* feed the watchdog: long hardware loops (the radio's calibration) */
+void shim_delay_us(uint32_t us);      /* a busy wait in RAM (.ram_text), the watchdog fed: the radio trim's delays */
 void shim_log(const char *s);         /* a line for the screen's log */
 int shim_store_load(void *dst, uint32_t max);   /* syscfg's flash object */
 int shim_store_save(const void *src, uint32_t len);
