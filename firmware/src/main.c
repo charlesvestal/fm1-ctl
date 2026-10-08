@@ -40,7 +40,7 @@ static inline int32_t clamp(int32_t v, int32_t lo, int32_t hi) { return v < lo ?
 #include "midi_uart.c"            /* MIDI IN on the TRS jack */
 
 static uint8_t flash_ok;          /* JEDEC id matched at boot */
-static void audio_silence(void) {}   /* Felucca's hook before a flash erase: no audio here */
+static void audio_silence(void);   /* Felucca's hook before a flash erase (main_fm1.c) */
 static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off windows: input keeps up */
 {
     uint8_t *d = dst;

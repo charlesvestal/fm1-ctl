@@ -43,13 +43,23 @@ tap REC
 expect_out USB 82 38 00
 expect_out USB B2 7B 00
 out
-# MASTER: off by default; on the Setup page KNOB 3 gives it a controller
+# MASTER: the onboard synth's volume while Sound is on (the default); with Sound off, the Setup page's
+# KNOB 3 gives it a controller
 master 2000
 expect notes_out 0
 tap GLO
 tap GLO
 expect view 5
 spin K3 11
+master 4095
+tap GLO
+tap GLO
+expect view 7
+spin K1 2
+tap GLO
+tap GLO
+expect view 5
+master 2000
 master 4095
 expect_out USB B2 0B 7F
 master 0
@@ -58,3 +68,16 @@ tap HOME
 wait 200
 shot play.png
 leds
+# the onboard GM synth: Sound back on (Keys + in), a held key sounds
+tap GLO
+tap GLO
+tap GLO
+tap GLO
+expect view 7
+spin K1 -2
+key 12 down
+wait 300
+expect voices >0
+shot sound.png
+key 12 up
+wait 100

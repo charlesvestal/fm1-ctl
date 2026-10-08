@@ -18,8 +18,8 @@
  * Out: everything played goes to USB and Bluetooth. Thru: USB in -> Bluetooth, Bluetooth in -> USB,
  * the TRS jack in -> USB and Bluetooth. */
 
-enum { V_PLAY, V_SCALE, V_ARP, V_SEQ, V_KNOBS, V_SETUP, V_BLE, NVIEWS };
-static const char *const VIEW_NAME[NVIEWS] = {"Play", "Scale", "Arp", "Sequencer", "Knobs", "Setup", "Bluetooth"};
+enum { V_PLAY, V_SCALE, V_ARP, V_SEQ, V_KNOBS, V_SETUP, V_BLE, V_SOUND, NVIEWS };
+static const char *const VIEW_NAME[NVIEWS] = {"Play", "Scale", "Arp", "Sequencer", "Knobs", "Setup", "Bluetooth", "Sound"};
 static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_SEL, B_LFO, B_SEQ, B_GLO, B_GLO, B_GLO};
 static const char *const PORT_NAME[NPORTS] = {"USB", "BLE", "TRS"};
 static const char *const NOTE_NAME[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
@@ -259,7 +259,9 @@ static void midi_in(void)
             continue;
         ui.in_t[port] = plat_ms();
         ui.n_in[port]++;
-        send(pkt & ~0xF0u, THRU[port]);  /* cable 0 */
+        send(pkt & ~0xF0u, THRU[port] | TO_NOSYNTH);  /* cable 0 */
+        if (proj.sound == SOUND_IN)
+            send(pkt & ~0xF0u, TO_SYNTH);
         if (st >= 0xF8u) {
             engine_midi_clock(st);
             if (proj.clock == CLK_EXT && (st == 0xFAu || st == 0xFBu || st == 0xFCu))
@@ -278,7 +280,7 @@ static void midi_in(void)
 /* what a knob edits: one of these */
 enum { K_VAL0, K_VAL1, K_VAL2, K_VAL3, K_CC0, K_CC1, K_CC2, K_CC3, K_ROOT, K_SCALE, K_VEL, K_HUMAN,
        K_AMODE, K_ARATE, K_AOCT, K_ALATCH, K_STEPS, K_HITS, K_ROT, K_NOTE, K_CLOCK, K_SEQCH, K_MASTER, K_GLOW,
-       K_BT, K_NONE };
+       K_BT, K_SOUND, K_NONE };
 static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_VAL0, K_VAL1, K_VAL2, K_VAL3},
     {K_ROOT, K_SCALE, K_VEL, K_HUMAN},
@@ -287,6 +289,7 @@ static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_CC0, K_CC1, K_CC2, K_CC3},
     {K_CLOCK, K_SEQCH, K_MASTER, K_GLOW},
     {K_BT, K_NONE, K_NONE, K_NONE},
+    {K_SOUND, K_NONE, K_NONE, K_NONE},
 };
 
 static track_t *trk(void) { return &proj.trk[ui.track]; }
@@ -316,6 +319,7 @@ static int knob_get(int k)
     case K_MASTER: return proj.master_cc;
     case K_GLOW: return proj.glow;
     case K_BT: return plat_ble_state() != BLE_OFF;
+    case K_SOUND: return proj.sound;
     default: return 0;
     }
 }
@@ -331,6 +335,7 @@ static void knob_range(int k, int *lo, int *hi)
     case K_ARATE: *hi = NRATE - 1; break;
     case K_AOCT: *lo = 1; *hi = 3; break;
     case K_ALATCH: case K_BT: *hi = 1; break;
+    case K_SOUND: *hi = NSOUND - 1; break;
     case K_STEPS: *lo = 1; *hi = 16; break;
     case K_HITS: *hi = trk()->steps; break;
     case K_ROT: *hi = trk()->steps - 1; break;
@@ -345,7 +350,7 @@ static void knob_name(int k, char *b)
 {
     static const char *const N[] = {"Root", "Scale", "Velocity", "Humanize", "Mode", "Rate", "Octaves", "Latch",
                                     "Steps", "Hits", "Rotate", "Note", "Clock", "Seq ch", "MASTER", "Glow",
-                                    "Bluetooth"};
+                                    "Bluetooth", "Sound"};
     if (k <= K_VAL3)
         put_u(put_s(b, "CC "), proj.cc[proj.bank][k - K_VAL0]);
     else if (k <= K_CC3)
@@ -374,6 +379,7 @@ static void knob_text(int k, char *b)
             put_s(b, "Off");
         break;
     case K_GLOW: put_s(b, GLOW_NAME[v]); break;
+    case K_SOUND: put_s(b, v == SOUND_IN ? "Keys + in" : v == SOUND_KEYS ? "Keys" : "Off"); break;
     case K_BT: {
         static const char *const S[] = {"Off", "On", "On", "Failed"};
         put_s(b, S[plat_ble_state() & 3]);
@@ -424,6 +430,12 @@ static void knob_set(int k, int v)
         case K_SEQCH: engine_panic(); proj.seq_ch = (uint8_t)v; break;
         case K_MASTER: proj.master_cc = (uint8_t)v; ui.master_sent = -1; break;
         case K_GLOW: proj.glow = (uint8_t)v; break;
+        case K_SOUND:
+            if (v == SOUND_OFF)
+                gm_panic();
+            proj.sound = (uint8_t)v;
+            ui.master_sent = -1;
+            break;
         case K_BT:
             if (v && plat_ble_state() == BLE_OFF) {
                 plat_ble_start();
@@ -519,7 +531,7 @@ static void button_up(int b)
     case B_SEL: set_view(V_SCALE); break;
     case B_LFO: set_view(V_ARP); break;
     case B_SEQ: set_view(V_SEQ); break;
-    case B_GLO: set_view(ui.view == V_KNOBS ? V_SETUP : ui.view == V_SETUP ? V_BLE : V_KNOBS); break;
+    case B_GLO: set_view(ui.view == V_KNOBS ? V_SETUP : ui.view == V_SETUP ? V_BLE : ui.view == V_BLE ? V_SOUND : V_KNOBS); break;
     case B_EDIT: set_view((ui.view + 1) % NVIEWS); break;
     case B_SAVE:
         if (project_save() == 0) {
@@ -556,7 +568,7 @@ static void master_pot(void)
 {
     int32_t raw = (int32_t)plat_master(), v;
     ui.master_raw += (raw - ui.master_raw) / 4;
-    if (!proj.master_cc)
+    if (!proj.master_cc || proj.sound != SOUND_OFF)   /* with the synth on, MASTER is its volume */
         return;
     v = ui.master_raw * 127 / 4000;
     if (v > 127)
@@ -935,6 +947,29 @@ static void draw_setup(void)
     cv_text(12, 4 + 6 * 18, &FONT_XS, "Firmware " CT_VERSION, K_LINE);
 }
 
+#include "gm_names.h"
+static void draw_sound(void)                     /* the onboard GM synth: what it plays, and its load */
+{
+    char t[40];
+    uint32_t p = gm_program[proj.chan];
+    if (proj.sound == SOUND_OFF) {
+        cv_text(12, 2, &FONT_B, "Off", K_TEXT);
+        cv_text(12, 24, &FONT_XS, "KNOB 1 turns the onboard GM sounds on.", K_DIM);
+        cv_text(12, 42, &FONT_XS, "MASTER sends its controller (Setup).", K_DIM);
+        return;
+    }
+    cv_text(12, 2, &FONT_B, proj.chan == 9 ? "Drum kit" : GM_PROGRAM[p], K_TEXT);
+    if (proj.chan == 9)
+        put_s(t, "GM drums, channel 10");
+    else
+        put_u(put_s(t, "GM program "), p + 1u);
+    cv_text(12, 22, &FONT_XS, t, K_DIM);
+    cv_text(12, 46, &FONT_XS, proj.sound == SOUND_IN ? "Plays Ctl's notes and MIDI in" : "Plays Ctl's notes (not MIDI in)", K_DIM);
+    cv_text(12, 64, &FONT_XS, "PRESETS picks the program. MASTER: volume.", K_DIM);
+    put_s(put_u(put_s(put_u(put_s(t, "Voices "), gm_voices), "    CPU "), plat_cpu_pct()), "%");
+    cv_text(12, 90, &FONT_XS, t, K_DIM);
+}
+
 static void draw_ble(void)
 {
     char t[40];
@@ -978,6 +1013,8 @@ static void draw_main(void)
             h = hash(hash(h, proj.trk[i].pat | (uint32_t)proj.trk[i].steps << 16 | proj.trk[i].mute << 21 |
                                  (uint32_t)proj.trk[i].note << 22),
                      (uint32_t)eng_track_pos(i));
+    if (ui.view == V_SOUND)
+        h = hash(hash(h, gm_voices | proj.sound << 8 | (uint32_t)gm_program[proj.chan] << 16), plat_cpu_pct());
     if (ui.view == V_BLE) {
         h = hash(hash(h, plat_ble_log_total()), ui.n_in[PORT_BLE] ^ ui.n_out[PORT_BLE] << 16);
         for (i = 0; i < 7; i++)
@@ -994,6 +1031,7 @@ static void draw_main(void)
     case V_SEQ: draw_seq(); break;
     case V_KNOBS: draw_knobs_page(); break;
     case V_SETUP: draw_setup(); break;
+    case V_SOUND: draw_sound(); break;
     default: draw_ble(); break;
     }
     cv_blit(0, MAIN_Y);

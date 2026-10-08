@@ -100,8 +100,11 @@ int plat_midi_in(uint32_t *pkt, int *port)
     mi_r++;
     return 1;
 }
+static void host_synth(uint32_t pkt, uint32_t to);
 void plat_midi_send(uint32_t pkt, uint32_t to)
 {
+    host_synth(pkt, to);                   /* the onboard synth, as the device */
+    to &= TO_USB | TO_BLE;
     if ((to & TO_BLE) && !ble_conn)       /* as the device: nothing queues for a central not there */
         to &= ~TO_BLE;
     if (!to)
@@ -266,8 +269,20 @@ static void png_write(const char *path)
 /* --------------------------------------------------------- the device --- */
 static uint32_t ui_due;
 
+uint32_t plat_cpu_pct(void) { return 0; }
+static void host_synth(uint32_t pkt, uint32_t to)
+{
+    uint32_t st = (pkt >> 8) & 0xFFu;
+    if (((to & TO_SYNTH) || ((to & (TO_USB | TO_BLE)) && !(to & TO_NOSYNTH))) && proj.sound != SOUND_OFF &&
+        st >= 0x80u && st < 0xF0u)
+        gm_midi(st, (pkt >> 16) & 0x7Fu, (pkt >> 24) & 0x7Fu);
+}
+
 static void boot(void)
 {
+    static int synth;
+    if (!synth)
+        synth = gm_init() == 0;
     project_load();
     lcd_fill(0, 0, 240, 240, 0);
     ble_state = BLE_OFF;                   /* Bluetooth starts at every boot, as on the device */
@@ -283,6 +298,10 @@ static void run_ms(uint32_t ms)
         now_ms++;
         ble_tick();
         engine_tick();                     /* the device's 1 kHz tick */
+        if (now_ms % 6u == 0u) {           /* the synth, about as often as the device's audio halves */
+            static int32_t blk[256 * 2];
+            gm_render(blk, 256, 4096);
+        }
         if (now_ms >= ui_due) {
             ui_due = now_ms + 16;
             ui_frame();
@@ -318,7 +337,9 @@ static uint32_t mk_pkt(const char *a, const char *b, const char *c)
 static int expect(const char *what, const char *val)
 {
     int got;
-    if (!strcmp(what, "view"))
+    if (!strcmp(what, "voices"))           /* the onboard synth's voices sounding */
+        got = gm_voices;
+    else if (!strcmp(what, "view"))
         got = ui.view;
     else if (!strcmp(what, "chan"))
         got = proj.chan;

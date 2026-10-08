@@ -36,8 +36,12 @@ void plat_unlock(uint32_t f);
 enum { PORT_USB, PORT_BLE, PORT_TRS, NPORTS };
 #define TO_USB (1u << PORT_USB)
 #define TO_BLE (1u << PORT_BLE)
+#define TO_SYNTH (1u << 4)                     /* the onboard GM synth (when Sound is on) */
+#define TO_NOSYNTH (1u << 5)                   /* MIDI thru: not to the synth (it gets MIDI in by TO_SYNTH, if asked) */
 int plat_midi_in(uint32_t *pkt, int *port);   /* 1 = got one, from port PORT_* */
-void plat_midi_send(uint32_t pkt, uint32_t to);   /* to: TO_USB | TO_BLE; main loop or the 1 kHz tick */
+void plat_midi_send(uint32_t pkt, uint32_t to);   /* to: TO_USB | TO_BLE (and the synth: TO_SYNTH, TO_NOSYNTH); main loop
+                                                  * or the 1 kHz tick. Ctl's own notes (to USB or BLE) also play the synth */
+uint32_t plat_cpu_pct(void);           /* the GM synth's share of the audio time, % */
 
 /* Bluetooth (BLE MIDI): started at every boot (not after a crash in it: then by hand) */
 enum { BLE_OFF, BLE_STARTING, BLE_READY, BLE_FAILED };

@@ -41,7 +41,7 @@ CFLAGS = ["-Os", "-ffunction-sections", "-fno-builtin", "-Wall", "-Wno-unused-fu
 # build (-ffp-contract=off) computes the same samples
 FPU = ["-mcpu=r3", "-mfprev1", "-ffp-contract=off"]
 # separate units at -O2 (none: a controller has no instrument)
-O2_UNITS = []
+O2_UNITS = ["dsp/gm.c", "dsp/eas/eas_chorus.c", "dsp/eas/eas_chorusdata.c", "dsp/eas/eas_config.c", "dsp/eas/eas_data.c", "dsp/eas/eas_filter.c", "dsp/eas/eas_host_fm1.c", "dsp/eas/eas_math.c", "dsp/eas/eas_midi.c", "dsp/eas/eas_mididata.c", "dsp/eas/eas_mixbuf.c", "dsp/eas/eas_mixer.c", "dsp/eas/eas_pan.c", "dsp/eas/eas_pcm.c", "dsp/eas/eas_pcmdata.c", "dsp/eas/eas_public.c", "dsp/eas/eas_reverb.c", "dsp/eas/eas_reverbdata.c", "dsp/eas/eas_smf.c", "dsp/eas/eas_smfdata.c", "dsp/eas/eas_sndlibmgt.c", "dsp/eas/eas_voicemgt.c", "dsp/eas/eas_wtengine.c", "dsp/eas/eas_wtsynth.c", "dsp/eas/wt_200k_G.c"]   # the GM synth (Sonivox EAS)
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
 
 # SDK files of AC79NN_SDK_V1.2.1_2023-12-13 (the tested version)
@@ -251,7 +251,7 @@ def ble_units():
 
 
 def build_app():
-    flags = [*CFLAGS, *FPU, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
+    flags = [*CFLAGS, *FPU, "-Ifirmware/hal", "-Ifirmware/src", "-Ifirmware/src/dsp/eas", "-Ifirmware/src/dsp/eas/fm1inc", "-Ibuild/gen"]
     for flag in ("CT_CDC",):
         v = os.environ.get(flag)    # unset: the default in firmware/src/main.c
         if v in ("0", "1"):
@@ -386,6 +386,8 @@ def mmio_check():
             where = f"{f.relative_to(FW)}:{no}"
             for rx, what in ((MMIO_LIT, "register/window address"), (MMIO_CAST, "volatile pointer cast"),
                              (MMIO_ASM, "inline asm")):
+                if rx is MMIO_LIT and "dsp/eas/" in where:
+                    continue                      # Sonivox: note, sample and table constants, not addresses
                 m = rx.search(ln)
                 if m:
                     errors.append(f"{where}: {what} outside hal/ ({m.group(0).strip()}); add a hal/ helper")

@@ -2,8 +2,8 @@
  * Boot, audio ISR and main loop adapted from Felucca's main.c / audio.c, Copyright (C) 2026
  * Leo Kuroshita (@kurogedelic), Hugelton Instruments. */
 /* Ctl on the FM-1 (from FoMni's): boot (WDT first, boot-loop guard, guards), LCD, input (TIMER5
- * 10 kHz), USB, the TRS jack; then the main loop: UI at ~60 frames/s, input and MIDI polled in between,
- * Bluetooth's turn (ble_poll) when it runs. No audio. */
+ * 10 kHz), USB, the TRS jack, audio (ALNK0: the onboard GM synth, below every other interrupt); then the
+ * main loop: UI at ~60 frames/s, input and MIDI polled in between, Bluetooth's turn (ble_poll) when it runs. */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
 
@@ -13,6 +13,51 @@ struct ct_dbg {
     uint32_t crash_seen;                            /* the crash count already reported at a boot */
 } ct_dbg __attribute__((section(".noinit")));
 static uint8_t safe_mode;                           /* two failed boots: USB on, nothing else (safe_main) */
+
+/* --------------------------------------------------------------- audio --- */
+/* the GM synth (dsp/gm.c) in Felucca's 256-frame halves (5.8 ms), at priority 3: below the 1 kHz tick
+ * (4), the radio (5..7) and everything else, so it never delays them; it renders in what is left */
+#define HALF_FRAMES 256u
+#define HALF_WORDS (HALF_FRAMES * 2u)
+#define FS 44100u
+static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
+static volatile uint32_t audio_cpu_q8;               /* audio_cpu_pct, audio_xruns: plat_fm1.c */
+static volatile uint32_t audio_gain_q12;            /* MASTER, as volume */
+
+static void render_block(int32_t *o)                /* ALNK0: one half, measured */
+{
+    uint32_t t0 = fm1_ticks(), us, budget = HALF_FRAMES * 1000000u / FS;
+    gm_render(o, HALF_FRAMES, proj.sound == SOUND_OFF ? 0u : audio_gain_q12);
+    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
+    audio_cpu_q8 = (audio_cpu_q8 * 15u + (us * 256u) / budget) / 16u;
+    audio_cpu_pct = (audio_cpu_q8 * 100u) >> 8;
+}
+void fm1_alnk0_irq(void)                            /* via isr_alnk0 (hal/fm1_isr.S) */
+{
+    uint8_t p = fm1_audio_pending();
+    fm1_audio_ack_aux(p);
+    if (p & FM1_AUDIO_HALF) {
+        uint32_t half = fm1_audio_free_half();
+        render_block(&abuf[half * HALF_WORDS]);
+        fm1_audio_ack_half();
+        if (fm1_audio_free_half() != half)
+            audio_xruns++;                          /* the DMA moved on while we rendered */
+    }
+}
+extern void isr_alnk0(void);
+static void audio_init(void)
+{
+    uint32_t i;
+    for (i = 0; i < 2u * HALF_WORDS; i++)
+        abuf[i] = 0;
+    fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);
+}
+static void audio_silence(void)                     /* IRQs off (flash erase): the DMA would loop stale audio */
+{
+    uint32_t i;
+    for (i = 0; i < sizeof abuf / sizeof abuf[0]; i++)
+        abuf[i] = 0;
+}
 
 /* ------------------------------------------------------------ timer --- */
 void fm1_timer5_irq(void)
@@ -59,6 +104,7 @@ static void hexs(char *b, uint32_t v)
 
 static void fm1_fault(const fm1_crash_t *c)
 {
+    fm1_audio_stop();
     char b[12];
     uint32_t t0;
     lcd_fill(0, 0, 240, 240, RGB(160, 0, 0));
@@ -81,6 +127,7 @@ static void fm1_fault(const fm1_crash_t *c)
 
 static void enter_uboot(const char *why)
 {
+    fm1_audio_stop();
     lcd_fill(0, 0, 240, 240, C_BLACK);
     draw_text_box(0, 110, 240, &FONT_S, why, C_WHITE, 1);
     fm1_delay_ms(20);
@@ -195,6 +242,8 @@ static void fm1_main(void)
     panel_init();
     led_pos_init();
     project_load();                                 /* defaults when nothing (or another format) is saved */
+    gm_init();                                      /* the onboard GM synth, then its output */
+    audio_init();
     usb_start();
     uart_midi_init();                               /* before TIMER5: it read-modify-writes port H too */
     fm1_timer5_start(isr_timer5, 4);                /* 4: below the radio's interrupts (5..7, ble.c) */
@@ -240,6 +289,7 @@ static void fm1_main(void)
         ota_service();                              /* M-UPGRADE handshake (other SysEx is dropped) */
         if (usb.ota_req) {
             usb.ota_req = 0;
+            gm_panic();
             if (flash_ok)
                 ota_session();                      /* returns only if nothing was committed */
             ui_init();
@@ -256,6 +306,7 @@ static void fm1_main(void)
             if (a >= 0) {
                 knob = knob < 0 ? a * 16 : knob + (a * 16 - knob) / 8;
                 master_q12 = (uint32_t)(knob / 4);
+                audio_gain_q12 = (master_q12 * master_q12) >> 12;   /* volume: a squared curve */
             }
         }
         if (fm1_ms - last_frame >= 16u) {           /* ~60 frames/s at most; input in between */

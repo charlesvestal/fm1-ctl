@@ -7,5 +7,6 @@ CC="${CC:-cc}"
 mkdir -p build/gen build/host
 [ -f build/gen/felucca_font.h ] || python3 tools/gen_font.py build/gen/felucca_font.h >/dev/null
 $CC -O2 -std=c99 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter \
-    -DCT_HOST -Ifirmware/src -Ibuild/gen -o build/host/ctl_host host/ctl_host.c
+    -DCT_HOST -Ifirmware/src -Ifirmware/src/dsp -Ifirmware/src/dsp/eas -Ibuild/gen -o build/host/ctl_host host/ctl_host.c \
+    firmware/src/dsp/gm.c $(ls firmware/src/dsp/eas/*.c | grep -v "wt_22khz\|wt_200k_samples") -lm
 echo "host: build/host/ctl_host"

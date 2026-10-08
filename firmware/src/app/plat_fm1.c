@@ -73,6 +73,8 @@ void plat_yield(void) { ble_poll(); }          /* Bluetooth: its notifications g
 
 /* MASTER: the pot, read in the main loop (main_fm1.c) */
 static volatile uint32_t master_q12;
+static volatile uint32_t audio_cpu_pct, audio_xruns;   /* the audio interrupt's (main_fm1.c) */
+uint32_t plat_cpu_pct(void) { return audio_cpu_pct; }
 uint32_t plat_master(void) { return master_q12; }
 
 /* the 1 kHz tick (engine_tick) runs in the TIMER5 interrupt: the main loop locks it out around what
@@ -122,6 +124,11 @@ void plat_midi_send(uint32_t pkt, uint32_t to)   /* the main loop's and the tick
         midi_out_event(pkt);
     if (to & TO_BLE)
         ble_midi_tap(pkt);
+    if (((to & TO_SYNTH) || ((to & (TO_USB | TO_BLE)) && !(to & TO_NOSYNTH))) && proj.sound != SOUND_OFF) {
+        uint32_t st = (pkt >> 8) & 0xFFu;      /* channel messages only: the synth's queue is single-writer, */
+        if (st >= 0x80u && st < 0xF0u)         /* and this runs under the lock or in the tick */
+            gm_midi(st, (pkt >> 16) & 0x7Fu, (pkt >> 24) & 0x7Fu);
+    }
     if (!in_tick)
         plat_unlock(f);
 }

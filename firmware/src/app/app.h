@@ -5,6 +5,7 @@
 #pragma once
 #include <stdint.h>
 #include "plat.h"
+#include "../dsp/gm.h"
 
 #ifndef CT_VERSION                       /* a release build passes its own (tools/build.py --release) */
 #define CT_VERSION "DEV"
@@ -16,7 +17,8 @@
 #define NTRACKS 4
 #define NSCALES 9
 
-enum { CLK_INT_OUT, CLK_INT, CLK_EXT, NCLK };            /* internal clock sent out / kept in / followed from MIDI in */
+enum { CLK_INT_OUT, CLK_INT, CLK_EXT, NCLK };
+enum { SOUND_IN, SOUND_KEYS, SOUND_OFF, NSOUND };   /* the onboard GM synth plays: Ctl's notes and MIDI in / Ctl's / nothing */            /* internal clock sent out / kept in / followed from MIDI in */
 enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_RANDOM, ARP_PLAYED, NARP };
 enum { RATE_4, RATE_8, RATE_8T, RATE_16, RATE_16T, RATE_32, NRATE };
 
@@ -44,7 +46,8 @@ typedef struct {
     uint8_t master_cc;                   /* the MASTER pot: 0 = off, else its controller number */
     uint8_t glow;                        /* unlit buttons: 0 off, 1 low, 2 high */
     track_t trk[NTRACKS];
-    uint8_t rsv[16];                     /* room to grow */
+    uint8_t sound;                       /* SOUND_* (0, the default, in an older project too: on, MIDI in too) */
+    uint8_t rsv[15];                     /* room to grow */
 } project_t;
 
 extern project_t proj;
