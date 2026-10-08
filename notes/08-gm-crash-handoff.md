@@ -34,4 +34,5 @@ Leads, most likely first:
    unavailable, it would crash. Check whether ble.c masks interrupts below some level during the trim.
 
 To reproduce: install build/ctl.fwsc (8d73987) with Sound on (the default); it crashes at the first boot
-with Bluetooth starting. Workaround meanwhile: Sound Off, or reinstall d5624a0.
+with Bluetooth starting. Workaround meanwhile: reinstall d5624a0 (Sound Off does not help: the synth still
+renders, silently; skipping the render when Sound is off would be a cheap fix to add anyway).
