@@ -249,7 +249,7 @@ int shim_store_save(const void *src, uint32_t len) { return plat_store_save(OBJ_
 static volatile uint8_t ble_state;
 
 /* ---- MIDI both ways (ble/midi/le_midi.c); everything here runs in the main loop */
-extern int ble_midi_send_many(const uint32_t *pkts, int n);
+extern int ble_midi_send_many(const uint32_t *pkts, const uint16_t *ms, int n);
 extern int ble_midi_connected(void);
 static uint32_t ble_rx_count, ble_tx_count;
 static uint8_t ble_conn;                          /* ble_midi_connected(), as of the last poll */
@@ -272,51 +272,75 @@ static int ble_midi_in(uint32_t *pkt)
     bi_r++;
     return 1;
 }
+/* out: every message with the millisecond it was queued (fm1_ms), which goes with it as its BLE MIDI
+ * timestamp. MIDI clock waits in its own short ring (a few ticks at most: later than that they are no
+ * use) so a stream of clock never holds up notes; the drain merges the two in time order. */
 static uint32_t ble_out_q[BQ];
+static uint16_t ble_out_ms[BQ];
 static uint32_t bo_w, bo_r;
-/* MIDI clock does not queue: the ticks waiting are counted (a few at most; later than that they are
- * no use) and ride at the end of the next notification, so a stream of clock never holds up notes */
-#define BLE_CLOCKS_MAX 3u
-static volatile uint8_t ble_clocks;
-static void ble_midi_tap(uint32_t pkt)            /* queued for ble_poll; nothing queues for a central not there */
+#define BCQ 4u
+static uint16_t ble_clk_ms[BCQ];
+static volatile uint32_t bc_w, bc_r;
+static void ble_midi_tap(uint32_t pkt)            /* main loop (locked) or the tick; nothing queues for a central not there */
 {
+    uint16_t ms = (uint16_t)(fm1_ms & 0x1FFFu);
     if (ble_state != BLE_READY || !ble_conn)
         return;
     if (((pkt >> 8) & 0xFFu) == 0xF8u) {
-        if (ble_clocks < BLE_CLOCKS_MAX)
-            ble_clocks++;
+        if (bc_w - bc_r < BCQ) {
+            ble_clk_ms[bc_w % BCQ] = ms;
+            RING_PUBLISH();
+            bc_w++;
+        }
         return;
     }
     if (bo_w - bo_r < BQ) {
         ble_out_q[bo_w % BQ] = pkt;
+        ble_out_ms[bo_w % BQ] = ms;
         RING_PUBLISH();
         bo_w++;
     }
 }
+static int ms_before(uint16_t a, uint16_t b) { return ((uint32_t)(b - a) & 0x1FFFu) < 4096u && a != b; }
 static void ble_midi_drain(void)                  /* main loop: what waits, as many notifications as the stack takes */
 {
     int round;
     for (round = 0; round < 4; round++) {
-        uint32_t pkts[16], n = 0, c, sent, f;
-        while (bo_r + n != bo_w && n < 12u) {
-            RING_PUBLISH();
-            pkts[n] = ble_out_q[(bo_r + n) % BQ];
-            n++;
+        uint32_t pkts[16], n = 0, ni = 0, ci, nw, cw, sent, k;
+        uint16_t ms[16];
+        uint8_t is_clk[16];
+        uint32_t f = plat_lock();                 /* a snapshot: the tick may add meanwhile */
+        nw = bo_w;
+        cw = bc_w;
+        plat_unlock(f);
+        ci = bc_r;
+        ni = bo_r;
+        while (n < 16u && (ni != nw || ci != cw)) {
+            int take_clk = ci != cw && (ni == nw || ms_before(ble_clk_ms[ci % BCQ], ble_out_ms[ni % BQ]));
+            if (take_clk) {
+                pkts[n] = 0xFu | 0xF8u << 8;
+                ms[n] = ble_clk_ms[ci % BCQ];
+                is_clk[n++] = 1;
+                ci++;
+            } else {
+                pkts[n] = ble_out_q[ni % BQ];
+                ms[n] = ble_out_ms[ni % BQ];
+                is_clk[n++] = 0;
+                ni++;
+            }
         }
-        for (c = 0; c < ble_clocks && n + c < 16u; c++)
-            pkts[n + c] = 0xFu | 0xF8u << 8;
-        if (!(n + c))
+        if (!n)
             return;
-        sent = (uint32_t)ble_midi_send_many(pkts, (int)(n + c));
+        sent = (uint32_t)ble_midi_send_many(pkts, ms, (int)n);
         if (!sent)
             return;                               /* the stack is full: what did not go stays for the next poll */
-        RING_PUBLISH();
-        bo_r += sent < n ? sent : n;
-        if (sent > n) {
-            f = plat_lock();
-            ble_clocks = (uint8_t)(ble_clocks > sent - n ? ble_clocks - (sent - n) : 0u);
-            plat_unlock(f);
+        for (k = 0; k < sent; k++) {
+            if (is_clk[k])
+                bc_r++;
+            else
+                bo_r++;
         }
+        RING_PUBLISH();
         ble_tx_count += sent;
     }
 }
@@ -326,6 +350,9 @@ static volatile uint32_t ble_events;
 extern void btstack_init(void);
 extern void bt_ble_init(void);
 extern void lmp_set_sniff_disable(void);
+extern void bt_max_pwr_set(uint8_t pwr, uint8_t pg_pwr, uint8_t iq_pwr, uint8_t ble_pwr);
+#define BT_TX_POWER 8                             /* the SDK's default (classic, unused) */
+#define BLE_TX_POWER 11                           /* the top: -64 dBm at 6 where the stock firmware gives -39 */
 extern void lib_make_ble_address(uint8_t *ble, uint8_t *edr);
 extern int le_controller_set_mac(void *addr);
 extern int syscfg_read(uint16_t id, void *buf, uint16_t len);
@@ -434,6 +461,10 @@ static void ble_start(void)
     shim_os_init();
     fm1_guard_stack_floor(shim_stacks_lo());      /* the tasks' stacks are in the pool */
     lmp_set_sniff_disable();
+    /* the radio's transmit power, 0..11: the SDK sets it in its config start-up (apps/common/config/
+     * user_cfg.c, cfg_file_parse: classic 8, BLE 6), which the shim does not run; left alone the
+     * library transmits at its lowest (measured: -79 dBm where the stock firmware gives -39) */
+    bt_max_pwr_set(BT_TX_POWER, 6, 6, BLE_TX_POWER);
     lib_make_ble_address(addr, (uint8_t *)bt_get_mac_addr());
     le_controller_set_mac(addr);
     btstack_init();
@@ -449,7 +480,7 @@ static void ble_poll(void)
     ble_conn = (uint8_t)(ble_state == BLE_READY && ble_midi_connected());
     if (!ble_conn) {
         bo_r = bo_w;                              /* a central gone: nothing stale for the next one */
-        ble_clocks = 0;
+        bc_r = bc_w;
     }
     ble_midi_drain();
     ble_stuck_check();

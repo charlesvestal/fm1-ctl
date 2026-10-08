@@ -62,6 +62,9 @@ void plat_leds(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t d
     fm1_led_dim_div = DIV[glow < 0 || glow > 2 ? 0 : glow];
 }
 
+static void ble_poll(void);
+void plat_yield(void) { ble_poll(); }          /* Bluetooth: its notifications go out while the screen draws */
+
 /* MASTER: the pot, read in the main loop (main_fm1.c) */
 static volatile uint32_t master_q12;
 uint32_t plat_master(void) { return master_q12; }

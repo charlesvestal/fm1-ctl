@@ -24,6 +24,8 @@ uint32_t plat_master(void);            /* MASTER pot, 0..4096 */
 /* lights: bright buttons / keys, and dim ones (lit on one scan frame in a few; a bright bit wins);
  * glow 0..2 sets how dim (0: the dim ones stay off) */
 void plat_leds(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t dim_keys, int glow);
+/* the platform's background work (Bluetooth), between the screen's bands: drawing takes a while */
+void plat_yield(void);
 /* a critical section against the 1 kHz tick (engine_tick); main loop only */
 uint32_t plat_lock(void);
 void plat_unlock(uint32_t f);

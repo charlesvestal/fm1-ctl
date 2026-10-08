@@ -10,9 +10,9 @@
  * le_trans_data.c (its event handling and connection-parameter requests), without its test profile.
  *
  *   bt_ble_init()                 the stack is up (BT_STATUS_INIT_OK): profile, advertising
- *   ble_midi_send_many(pkts, n)   USB-MIDI packets (cin | status << 8 | d1 << 16 | d2 << 24) to the
- *                                 central, as many as fit one notification; returns how many went; from
- *                                 the main loop (the stack's context)
+ *   ble_midi_send_many(pkts, ms, n)   USB-MIDI packets (cin | status << 8 | d1 << 16 | d2 << 24), each with
+ *                                 the millisecond it happened, to the central, as many as fit one
+ *                                 notification; returns how many went; from the main loop (the stack's context)
  *   ble_midi_receive(pkt)         the firmware's: every MIDI message written by the central
  *   ble_midi_connected()          a central is connected and listens (CCC on) */
 #include "system/app_core.h"
@@ -69,11 +69,13 @@ static u8 adv_data[ADV_RSP_PACKET_MAX], scan_rsp_data[ADV_RSP_PACKET_MAX];
 static u8 ble_work_state, adv_ctrl_en;
 static OS_MUTEX mutex;
 
-/* connection parameters: ask for a short interval (MIDI latency), as the SDK demo does */
+/* connection parameters: ask for a short interval (MIDI latency and jitter): Apple's 11.25-15 ms for
+ * MIDI first, then the SDK demo's */
 static const uint8_t connection_update_enable = 1;
 static uint8_t connection_update_cnt;
 static const struct conn_update_param_t connection_param_table[] = {
-    {12, 24, 0, 400},               /* 15..30 ms, no latency, 4 s timeout */
+    {9, 12, 0, 400},                /* 11.25..15 ms (1.25 ms units), no latency, 4 s timeout */
+    {12, 24, 0, 400},               /* 15..30 ms */
     {16, 32, 0, 400},
 };
 #define CONN_PARAM_TABLE_CNT (sizeof(connection_param_table) / sizeof(connection_param_table[0]))
@@ -104,7 +106,7 @@ static void connection_update_complete_success(u8 *packet)
     int conn_interval = hci_subevent_le_connection_update_complete_get_conn_interval(packet);
     int conn_latency = hci_subevent_le_connection_update_complete_get_conn_latency(packet);
     int conn_timeout = hci_subevent_le_connection_update_complete_get_supervision_timeout(packet);
-    log_info("conn: interval %d latency %d timeout %d\n", conn_interval, conn_latency, conn_timeout);
+    printf("conn: interval %d latency %d\n", conn_interval, conn_latency);   /* 1.25 ms units, on the log */
 }
 
 /* ---- MIDI in: a BLE MIDI packet is a header, then (timestamp, message) pairs with running status */
@@ -166,21 +168,44 @@ static void midi_parse(const u8 *b, u16 len)
 /* ---- MIDI out: as many messages as fit one packet (header, then timestamp + message each) */
 int ble_midi_connected(void) { return con_handle && att_get_ccc_config(H_CCC); }
 static u16 send_mtu = 20;                        /* ATT payload: 23 - 3 until the exchange says more */
-int ble_midi_send_many(const uint32_t *pkts, int n)
+int ble_midi_send_many(const uint32_t *pkts, const uint16_t *ms, int n)
 {
-    u8 buf[64];
-    u32 t = shim_ms(), len = 0, remain = 0;
+    /* each message carries the millisecond it happened (ms[], 13 bits): a receiver that honours the
+     * timestamps (CoreMIDI does) replays the original timing, however the radio bunched the packets.
+     * Within one packet the times may not go backwards and span under 128 ms (the header holds the
+     * first's high bits; a low byte smaller than the one before means the next 128 ms). */
+    u8 buf[64], run = 0;
+    u32 len = 0, remain = 0, t0, tp;
     int i;
+    static u32 remain_max;
     if (!ble_midi_connected() || n <= 0)
         return 0;
+    /* one notification in the stack at a time: the radio sends about one a connection interval, so
+     * what piles up meanwhile goes together in the next one (with its own timestamps) instead of as a
+     * queue of small ones that each wait for a slot */
     ble_op_att_get_remain(&remain);
-    if (remain < 8u)
-        return 0;                                /* the stack's buffer is full: later */
-    buf[len++] = (u8)(0x80 | ((t >> 7) & 0x3F));
+    if (remain > remain_max)
+        remain_max = remain;
+    if (remain < remain_max || remain < 8u)
+        return 0;
+    t0 = tp = ms[0] & 0x1FFFu;
+    buf[len++] = (u8)(0x80 | ((t0 >> 7) & 0x3F));
     for (i = 0; i < n; i++) {
-        u8 st = (u8)(pkts[i] >> 8), cin = pkts[i] & 0xF, m[3];
-        u32 k = 0;
-        m[k++] = st;
+        u8 st = (u8)(pkts[i] >> 8), cin = pkts[i] & 0xF, m[4];
+        u32 k = 0, t = ms[i] & 0x1FFFu;
+        if (((t - tp) & 0x1FFFu) > 4096u)        /* earlier than the one before: as late as it */
+            t = tp;
+        if (((t - t0) & 0x1FFFu) > 120u)         /* the rest in the next packet */
+            break;
+        /* running status (channel messages only): the same status at the same time needs neither the
+         * timestamp nor the status again, a new time only the timestamp */
+        if (st < 0xF0 && st == run && i) {
+            if (t != tp)
+                m[k++] = (u8)(0x80 | (t & 0x7F));
+        } else {
+            m[k++] = (u8)(0x80 | (t & 0x7F));
+            m[k++] = st;
+        }
         if (cin == 0xF || cin == 5) {
         } else if (cin == 2 || cin == 0xC || cin == 0xD) {
             m[k++] = (u8)(pkts[i] >> 16);
@@ -188,11 +213,15 @@ int ble_midi_send_many(const uint32_t *pkts, int n)
             m[k++] = (u8)(pkts[i] >> 16);
             m[k++] = (u8)(pkts[i] >> 24);
         }
-        if (len + 1 + k > send_mtu || len + 1 + k > sizeof buf)
+        if (len + k > send_mtu || len + k > sizeof buf)
             break;
-        buf[len++] = (u8)(0x80 | (t & 0x7F));
         memcpy(buf + len, m, k);
         len += k;
+        tp = t;
+        if (st < 0xF0)
+            run = st;
+        else if (st < 0xF8)
+            run = 0;                             /* system common ends running status; real time does not */
     }
     if (i == 0)
         return 0;

@@ -1119,7 +1119,9 @@ void ui_frame(void)
     input();
     autosave();
     draw_header();
+    plat_yield();
     draw_main();
+    plat_yield();
     draw_knobs();
     leds();
     ui.frame++;

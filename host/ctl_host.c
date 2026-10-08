@@ -80,6 +80,7 @@ void plat_leds(uint32_t b, uint32_t k, uint32_t db, uint32_t dk, int glow)
     dim_keys = glow ? dk & ~k : 0;
     glow_level = glow;
 }
+void plat_yield(void) {}
 uint32_t plat_lock(void) { return 0; }
 void plat_unlock(uint32_t f) { (void)f; }
 
