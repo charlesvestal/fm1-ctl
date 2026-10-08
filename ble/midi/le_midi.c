@@ -74,7 +74,8 @@ static OS_MUTEX mutex;
 static const uint8_t connection_update_enable = 1;
 static uint8_t connection_update_cnt;
 static const struct conn_update_param_t connection_param_table[] = {
-    {9, 12, 0, 400},                /* 11.25..15 ms (1.25 ms units), no latency, 4 s timeout */
+    {9, 21, 0, 400},                /* 11.25..26.25 ms (1.25 ms units; Apple: max >= min + 15 ms), 4 s timeout */
+    {9, 12, 0, 400},                /* 11.25..15 ms (BLE MIDI's own advice) */
     {12, 24, 0, 400},               /* 15..30 ms */
     {16, 32, 0, 400},
 };
@@ -382,6 +383,7 @@ static void cbk_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
         break;
     case L2CAP_EVENT_CONNECTION_PARAMETER_UPDATE_RESPONSE:
         tmp = little_endian_read_16(packet, 4);
+        printf("conn param %d: %s\n", connection_update_cnt, tmp ? "refused" : "accepted");   /* on the log */
         if (tmp) {
             connection_update_cnt++;
             check_connetion_updata_deal();
