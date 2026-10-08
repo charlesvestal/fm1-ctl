@@ -10,29 +10,7 @@ send controllers in four banks, an arpeggiator and a four-track step sequencer r
 everything goes out over USB and Bluetooth (BLE MIDI) at once. MIDI coming in is passed on: USB to
 Bluetooth, Bluetooth to USB, and the TRS jack (MIDI in) to both. No sound.
 
-| Control | What it does |
-| --- | --- |
-| Keys | Notes, chromatic from F3; with a scale, the white keys play its steps and the black keys its chords |
-| OCT− / OCT+ | The keys an octave down / up (−3 to +3) |
-| KNOB 1–4 | The page's four values; on Play, the knob bank's four controllers |
-| FX | The next knob bank (A–D; their controller numbers on the Knobs page) |
-| SELECT / ALGORITHM / PRESETS | Tempo, MIDI channel, program change |
-| ARP | The arpeggiator on / off (hold notes or chords) |
-| ENV | Sustain while held |
-| PLAY | Start / stop: the sequencer, and MIDI start / stop |
-| REC | All notes off |
-| HOME / SEL / LFO / SEQ | The Play, Scale, Arp and Sequencer pages |
-| GLO | Knobs, then Setup, then Bluetooth; EDIT steps through every page |
-| SAVE | Saves; Ctl also saves by itself a few seconds after a change (not while playing) |
-
-- **Scale page:** root, scale (nine, chromatic first), velocity, humanize (a velocity spread for the
-  arpeggiator and sequencer).
-- **Arp page:** mode (up, down, up-down, random, as played), rate (1/4 to 1/32), octaves, latch.
-- **Sequencer page:** four tracks on the sequencer channel (10: drums). KNOB 1–4 set the selected track's
-  steps, hits, rotation and note; the hits are spread evenly (a Euclidean rhythm), and each track can have
-  its own length. The keys edit here: white keys toggle steps, black keys 1–4 pick a track, 5–8 mute one.
-- **Setup page:** the clock (internal and sent out, internal, or external from any MIDI input), the
-  sequencer's channel, MASTER as a controller, and Glow: unlit buttons glow dimly so they can be read.
+**[MANUAL.md](MANUAL.md)** explains every control, page and setting.
 
 Bluetooth is off at every start. Turn KNOB 1 on the Bluetooth page to start it; it advertises as
 "FM-1" and stays on until the next restart. On a Mac: Audio MIDI Setup, Window, Show MIDI Studio,
