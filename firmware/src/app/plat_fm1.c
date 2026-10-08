@@ -55,6 +55,12 @@ void plat_leds(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t d
         else if (dim)
             dl[q >> 3] |= (uint8_t)(1u << (q & 7u));
     }
+    /* PLAY's second, green light: the matrix position with no key at column 8, row PA5 (found by
+     * lighting the unused positions: 9 and 10 light nothing) */
+    if (buttons & LED_PLAY_GREEN)
+        nl[8] |= 1u << 1;
+    else if (dim_buttons & LED_PLAY_GREEN)
+        dl[8] |= 1u << 1;
     for (c = 0; c < FM1_NCOL; c++) {
         fm1_led[c] = nl[c];
         fm1_led_dim[c] = dl[c];

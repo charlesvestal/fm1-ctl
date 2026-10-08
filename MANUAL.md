@@ -244,7 +244,8 @@ Saving pauses the FM-1 for a moment, which is why it waits until you stop playin
 ## The lights
 
 - **Bright:** the current page's button, ARP while the arpeggiator is on, ENV while sustain is held,
-  OCT− or OCT+ while the octave is shifted, and PLAY, which flashes on the beat while playing.
+  and OCT− or OCT+ while the octave is shifted.
+- **PLAY** is green: it flashes bright green on each beat while playing, and glows dim green otherwise.
 - **Keys:** light while you hold them, and when a note arrives from MIDI in.
 - **Dim (Glow):** every other function button, so the labels can be read in the dark. With a scale,
   the root keys glow too.

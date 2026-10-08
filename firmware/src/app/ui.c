@@ -1048,8 +1048,8 @@ static void draw_knobs(void)
 static void leds(void)
 {
     uint32_t b = 1u << VIEW_BTN[ui.view], k = 0, db, dk = 0, i;
-    if (ui.playing && eng_beat_on())
-        b |= 1u << B_PLAY;
+    if (ui.playing && eng_beat_on())             /* playing: PLAY green, bright on the beat */
+        b |= LED_PLAY_GREEN;
     if (proj.arp_on)
         b |= 1u << B_ARP;
     if (ui.sustain)
@@ -1058,7 +1058,9 @@ static void leds(void)
         b |= 1u << B_OCTDN;
     if (proj.octave > 0)
         b |= 1u << B_OCTUP;
-    db = ((1u << NB) - 1u) & ~b;
+    /* PLAY is green, never its red (that would mean recording, which Ctl does not do): dim green when
+     * stopped and between beats */
+    db = (((1u << NB) - 1u) & ~b & ~(1u << B_PLAY)) | LED_PLAY_GREEN;
     if (ui.view == V_SEQ) {
         const track_t *t = trk();
         int pos = eng_track_pos(ui.track);
