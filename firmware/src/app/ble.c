@@ -274,28 +274,51 @@ static int ble_midi_in(uint32_t *pkt)
 }
 static uint32_t ble_out_q[BQ];
 static uint32_t bo_w, bo_r;
+/* MIDI clock does not queue: the ticks waiting are counted (a few at most; later than that they are
+ * no use) and ride at the end of the next notification, so a stream of clock never holds up notes */
+#define BLE_CLOCKS_MAX 3u
+static volatile uint8_t ble_clocks;
 static void ble_midi_tap(uint32_t pkt)            /* queued for ble_poll; nothing queues for a central not there */
 {
-    if (ble_state == BLE_READY && ble_conn && bo_w - bo_r < BQ) {
+    if (ble_state != BLE_READY || !ble_conn)
+        return;
+    if (((pkt >> 8) & 0xFFu) == 0xF8u) {
+        if (ble_clocks < BLE_CLOCKS_MAX)
+            ble_clocks++;
+        return;
+    }
+    if (bo_w - bo_r < BQ) {
         ble_out_q[bo_w % BQ] = pkt;
         RING_PUBLISH();
         bo_w++;
     }
 }
-static void ble_midi_drain(void)                  /* main loop: what is queued, batched into one notification */
+static void ble_midi_drain(void)                  /* main loop: what waits, as many notifications as the stack takes */
 {
-    uint32_t pkts[16], n = 0, i;
-    while (bo_r + n != bo_w && n < 16u) {
+    int round;
+    for (round = 0; round < 4; round++) {
+        uint32_t pkts[16], n = 0, c, sent, f;
+        while (bo_r + n != bo_w && n < 12u) {
+            RING_PUBLISH();
+            pkts[n] = ble_out_q[(bo_r + n) % BQ];
+            n++;
+        }
+        for (c = 0; c < ble_clocks && n + c < 16u; c++)
+            pkts[n + c] = 0xFu | 0xF8u << 8;
+        if (!(n + c))
+            return;
+        sent = (uint32_t)ble_midi_send_many(pkts, (int)(n + c));
+        if (!sent)
+            return;                               /* the stack is full: what did not go stays for the next poll */
         RING_PUBLISH();
-        pkts[n] = ble_out_q[(bo_r + n) % BQ];
-        n++;
+        bo_r += sent < n ? sent : n;
+        if (sent > n) {
+            f = plat_lock();
+            ble_clocks = (uint8_t)(ble_clocks > sent - n ? ble_clocks - (sent - n) : 0u);
+            plat_unlock(f);
+        }
+        ble_tx_count += sent;
     }
-    if (!n)
-        return;
-    i = (uint32_t)ble_midi_send_many(pkts, (int)n);
-    RING_PUBLISH();
-    bo_r += i;                                    /* what did not go stays for the next poll */
-    ble_tx_count += i;
 }
 
 /* ---- the stack */
@@ -424,8 +447,10 @@ static void ble_poll(void)
     shim_timers();
     shim_run();
     ble_conn = (uint8_t)(ble_state == BLE_READY && ble_midi_connected());
-    if (!ble_conn)
+    if (!ble_conn) {
         bo_r = bo_w;                              /* a central gone: nothing stale for the next one */
+        ble_clocks = 0;
+    }
     ble_midi_drain();
     ble_stuck_check();
     if (ble_state == BLE_READY)

@@ -5,7 +5,8 @@
  * changes the arpeggiator's notes under plat_lock(); everything else it shares is a single byte or
  * halfword. Part of the unity build after project.c; the host simulator includes it too.
  *
- *   clock     24 ticks a quarter note. Internal: from proj.tempo, sent out (CLK_INT_OUT) or not.
+ *   clock     24 ticks a quarter note. Internal: from proj.tempo, sent out (CLK_INT_OUT: over USB always,
+ *             over Bluetooth only while playing) or not.
  *             External: one tick per MIDI clock received (engine_midi_clock, from the main loop).
  *   arp       runs whenever it is on and has notes, playing or not; rate 1/4 .. 1/32, gate half a step
  *   sequencer runs while playing (PLAY, or MIDI start when external): sixteenths, each track its own
@@ -224,8 +225,8 @@ void engine_tick(void)                           /* every millisecond (device: T
     eng.phase += proj.tempo * 24u;
     while (eng.phase >= 60000u) {
         eng.phase -= 60000u;
-        if (proj.clock == CLK_INT_OUT)
-            plat_midi_send(0xFu | 0xF8u << 8, TO_USB | TO_BLE);
+        if (proj.clock == CLK_INT_OUT)          /* Bluetooth only while playing: its link is narrow */
+            plat_midi_send(0xFu | 0xF8u << 8, TO_USB | (eng.running ? TO_BLE : 0u));
         clock_tick();
     }
 }

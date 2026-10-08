@@ -191,7 +191,7 @@ the Setup page (KNOB 1):
 
 | Clock | What happens |
 | --- | --- |
-| Int | Ctl keeps time at the SELECT tempo and sends MIDI clock out all the time. The default |
+| Int | Ctl keeps time at the SELECT tempo and sends MIDI clock: over USB all the time, over Bluetooth while playing. The default |
 | Int, quiet | Ctl keeps time but sends no clock |
 | Ext | Ctl follows MIDI clock and start / stop from any input: USB, Bluetooth or the TRS jack |
 
@@ -225,7 +225,9 @@ On a Mac: open Audio MIDI Setup, choose Window > Show MIDI Studio, click the Blu
 "FM-1" and click Connect. The FM-1 then appears as a MIDI device in any app. The page shows
 "Connected" and counts the messages in and out.
 
-Nothing is queued while no device is connected, so notes played meanwhile are not sent later.
+Nothing is queued while no device is connected, so notes played meanwhile are not sent later. Bluetooth carries far fewer messages than USB, so Ctl sends it MIDI clock only while playing, and
+never lets clock hold up notes. If chords still lag, set Clock to "Int, quiet" on the Setup page, or
+move the FM-1 closer to the computer.
 
 The page also shows the Bluetooth log. It survives a restart: if the FM-1 ever crashes, the next start
 shows a crash note here, which helps find the cause.
@@ -271,7 +273,7 @@ What Ctl sends, all on the keyboard channel unless noted:
 | REC | Note offs, control change 64 = 0, control change 123 = 0 (also on the sequencer channel) |
 | Arpeggiator | Note on and off |
 | Sequencer | Note on and off on the sequencer channel |
-| Clock (Int) | MIDI clock, 24 per beat, all the time |
+| Clock (Int) | MIDI clock, 24 per beat: over USB all the time, over Bluetooth while playing |
 | PLAY (Int, Int quiet) | MIDI start / stop |
 
 How MIDI coming in is passed along:
