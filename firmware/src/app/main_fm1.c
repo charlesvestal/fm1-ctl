@@ -206,6 +206,10 @@ static void fm1_main(void)
     fm1_delay_ms(400);
     ui_init();
     ble_boot_note();                                /* what ended the last Bluetooth run, into its log */
+    if (!ble_last_bad)
+        ble_start();                                /* Bluetooth is on, as on the stock firmware */
+    else
+        ui_say("BLUETOOTH OFF:", "IT CRASHED");     /* not twice in a row: KNOB 1 on its page starts it */
 
     for (;;) {
         fm1_wdt_feed();

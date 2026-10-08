@@ -429,9 +429,9 @@ static void knob_set(int k, int v)
                 plat_ble_start();
                 say("BLUETOOTH", "STARTING");
             } else if (!v) {
-                say("BLUETOOTH STOPS", "AT A RESTART");
+                say("BLUETOOTH", "IS ALWAYS ON");
             }
-            return;                      /* not saved: Bluetooth is off at every boot */
+            return;                      /* nothing saved: Bluetooth starts at every boot */
         default: return;
         }
     }
@@ -943,7 +943,7 @@ static void draw_ble(void)
                       s == BLE_STARTING ? "Starting" : s == BLE_FAILED ? "Failed" : "Off";
     cv_text(12, 2, &FONT_B, big, plat_ble_connected() ? K_COOL : K_TEXT);
     if (s == BLE_OFF) {
-        cv_text(12, 22, &FONT_XS, "KNOB 1 starts it, until a restart", K_DIM);
+        cv_text(12, 22, &FONT_XS, "Off after a crash: KNOB 1 starts it", K_DIM);
     } else {
         char *b = put_u(put_s(t, "Name: FM-1    in "), ui.n_in[PORT_BLE]);
         put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);

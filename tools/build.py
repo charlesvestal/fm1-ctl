@@ -239,7 +239,7 @@ def ble_units():
     inc = [f"-I{dst.relative_to(SRC) / d}" for d in BLE_INC] + ["-Ible/shim"]
     (OUT / "ble" / "o").mkdir(parents=True, exist_ok=True)
     units, objs = [], []
-    for a in ("ctx", "trace"):
+    for a in ("ctx",):
         units.append(("cc", "-c", SRC / "ble" / "shim" / f"{a}.S", "-o", OUT / "ble" / "o" / f"{a}.o"))
         objs.append(OUT / "ble" / "o" / f"{a}.o")
     for f in [*(SRC / "ble" / "shim").glob("*.c"), *(SRC / "ble" / "midi").glob("*.c"), *[dst / s for s in BLE_SDK_SRC]]:

@@ -23,12 +23,10 @@ spin K4 -2
 wait 50
 shot setup.png
 leds
-tap GLO
-spin K1 1
-wait 1100
 reboot
 expect cc0 70
 expect cc3 20
 expect chan 3
 expect tempo 130
-expect ble 0
+# Bluetooth starts again at boot
+expect ble 1

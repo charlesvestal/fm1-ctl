@@ -39,7 +39,7 @@ enum { PORT_USB, PORT_BLE, PORT_TRS, NPORTS };
 int plat_midi_in(uint32_t *pkt, int *port);   /* 1 = got one, from port PORT_* */
 void plat_midi_send(uint32_t pkt, uint32_t to);   /* to: TO_USB | TO_BLE; main loop or the 1 kHz tick */
 
-/* Bluetooth (BLE MIDI): off at boot, started by hand; once started it runs until a restart */
+/* Bluetooth (BLE MIDI): started at every boot (not after a crash in it: then by hand) */
 enum { BLE_OFF, BLE_STARTING, BLE_READY, BLE_FAILED };
 int plat_ble_state(void);
 int plat_ble_connected(void);          /* a central is connected and listening */

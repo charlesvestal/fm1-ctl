@@ -217,27 +217,27 @@ good for volume or expression. It sends from 0 to 127 across its travel, and onl
 
 ## Bluetooth
 
-Bluetooth is off every time the FM-1 starts. To turn it on, press GLO three times for the Bluetooth
-page and turn KNOB 1. The screen says "Starting", then "Advertising". Keys, USB and the screen pause
-for about a second while the radio starts. Bluetooth stays on until the next restart.
+Bluetooth starts by itself every time the FM-1 starts, as on the stock firmware. It advertises as
+"FM-1"; the Bluetooth page (press GLO three times) shows "Advertising", or "Connected" with the messages
+counted in and out.
 
 On a Mac: open Audio MIDI Setup, choose Window > Show MIDI Studio, click the Bluetooth button, find
-"FM-1" and click Connect. The FM-1 then appears as a MIDI device in any app. The page shows
-"Connected" and counts the messages in and out.
+"FM-1" and click Connect. The FM-1 then appears as a MIDI device in any app.
 
-Nothing is queued while no device is connected, so notes played meanwhile are not sent later. Bluetooth carries far fewer messages than USB, so Ctl sends it MIDI clock only while playing, and
-never lets clock hold up notes. If chords still lag, set Clock to "Int, quiet" on the Setup page, or
-move the FM-1 closer to the computer.
+Every message carries the moment it happened, so apps that use MIDI timestamps (most DAWs, when they
+record) get the timing as exact as over USB. Apps that play notes as they arrive hear Bluetooth's own
+unevenness, a few milliseconds to a few tens. Wi-Fi on 5 GHz and the FM-1 near the computer help.
+Nothing is queued while no device is connected, so notes played meanwhile are not sent later.
 
-The page also shows the Bluetooth log. It survives a restart: if the FM-1 ever crashes, the next start
-shows a crash note here, which helps find the cause.
+The page also shows the Bluetooth log, which survives a restart. If Bluetooth ever crashes the FM-1,
+the next start leaves Bluetooth off, says so, and the log shows a crash note; KNOB 1 on the page then
+starts Bluetooth by hand.
 
 ## Saving
 
 Ctl saves your settings by itself about four seconds after a change, once nothing is held and the
 sequencer is stopped. Press SAVE to save at once. Everything on the pages is saved: knob banks and
-values, scale, arpeggiator, sequencer tracks, channel, tempo, octave and Setup. Bluetooth is not:
-it is always off at start.
+values, scale, arpeggiator, sequencer tracks, channel, tempo, octave and Setup.
 
 Saving pauses the FM-1 for a moment, which is why it waits until you stop playing.
 

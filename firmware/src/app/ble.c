@@ -1,12 +1,12 @@
 /* Bluetooth MIDI: JieLi's BT stack (btctrler.a, btstack.a, wl_rf_common.a: Apache-2.0, binary only;
- * private until the licence is settled) on the shim in ../../ble/shim, from fm1-ble. Started by hand
- * (the Bluetooth page), never at boot: a crash restarts the FM-1 without Bluetooth. Part of the
- * unity build (main.c). The diagnostics (the log, the crash note, the live counters, trace.S) stay
- * while it is new. */
+ * the source may be shared, built firmware not until the licence is settled) on the shim in
+ * ../../ble/shim. Started at every boot, as the stock firmware does, unless the last Bluetooth run
+ * ended in a crash or a watchdog reset (then by hand, from the Bluetooth page). Part of the unity
+ * build (main.c). A short log and a crash note survive a reset (the Bluetooth page shows them). */
 #include "../../../ble/shim/shim.h"
 
 /* ---- the platform the shim asks for */
-uint32_t shim_ms(void) { return fm1_uptime_ms(); }   /* TIMER4, not the timer-5 tick (masked while BT starts) */
+uint32_t shim_ms(void) { return fm1_uptime_ms(); }   /* TIMER4: independent of the timer-5 tick */
 
 static volatile uint32_t shim_depth;
 uint32_t shim_irq_save(void)                     /* nests, unlike irq_save(): the shim calls itself */
@@ -41,58 +41,31 @@ __attribute__((section(".ram_text"), noinline, used)) void shim_delay_us(uint32_
 
 
 /* the radio's interrupts sit above the input timer (4): JieLi asks for 0..2, mapped to 5..7 */
-static uint8_t ble_irqs[8], ble_nirq;
-/* diagnostics (shim/trace.S): every entry into JieLi's two ISRs is noted here, count at +0, their
- * handlers at +4 and +8, a ring of 16 {reti, sp - 32} at +32; kept through a reset for the crash note */
-struct { uint32_t n, handler[2], rsv[5], ring[16][2]; } shim_isr_trace __attribute__((section(".noinit")));
-extern void shim_tramp_event(void), shim_tramp_rx(void);
-volatile uint32_t shim_delay_from __attribute__((section(".noinit"))), shim_delay_n __attribute__((section(".noinit")));
 void shim_request_irq(int index, int prio, void (*handler)(void))
 {
     uint32_t f = irq_save();
-    if (index == 45) {
-        shim_isr_trace.handler[0] = (uint32_t)(uintptr_t)handler;
-        handler = shim_tramp_event;
-    } else if (index == 29) {
-        shim_isr_trace.handler[1] = (uint32_t)(uintptr_t)handler;
-        handler = shim_tramp_rx;
-    }
     fm1_guard_unlock_top();
     fm1_irq_attach((uint32_t)index, handler, (uint32_t)(prio + 5 > 7 ? 7 : prio + 5));
     fm1_guard_lock_top();
     irq_restore(f);
-    if (ble_nirq < sizeof ble_irqs)
-        ble_irqs[ble_nirq++] = (uint8_t)index;
 }
 
-/* a short log for the screen, kept through a reset (.noinit): after a crash or a watchdog reset the
- * Setup page shows what the last run said */
+/* a short log for the screen, kept through a reset (.noinit): after a crash the Bluetooth page shows
+ * what the last run said, and a crash note */
 #define BLE_LOG_N 12
-#define BLE_LOG_MAGIC 0x424C4531u                 /* "BLE1" */
+#define BLE_LOG_MAGIC 0x424C4532u                 /* "BLE2" */
 static struct {
-    uint32_t magic, w, count, crash_seen, running, repeat, probe;   /* probe: nmi_probe(7) at the last start */
-    uint32_t clk0[4], clkl[4], t0_up;
-    uint32_t pnd_seen[8];                         /* IPND bits seen during the run (shim_wdt) */
-    uint8_t ana[10];                              /* P33 ANA_CON0..9 at the start: VDDIO, VDC14 (6, bits 0-2), SYSVDD (9, bits 0-3) */             /* t0_up: uptime_ms (TIMER4) at the start */                    /* clocks (fm1_clk_snapshot) at the start and at the last log line */
-    uint8_t depth[4];                             /* each task's deepest stack, 256-byte units (the last seen) */
+    uint32_t magic, w, crash_seen, running, repeat, t0_up;   /* running: a BT run was on (cleared at boot) */
     char line[BLE_LOG_N][40];
 } blog __attribute__((section(".noinit")));
-#define ble_log_w blog.w
-#define ble_log_count blog.count
-void shim_wdt(void)                               /* also: which interrupts are pending while the library spins */
-{
-    fm1_wdt_feed();
-    if (blog.magic == BLE_LOG_MAGIC)
-        fm1_ipnd_or(blog.pnd_seen);
-}
+void shim_wdt(void) { fm1_wdt_feed(); }
 void shim_log(const char *s)
 {
     char *d = blog.line[blog.w % BLE_LOG_N];
     uint32_t i;
     if (blog.magic != BLE_LOG_MAGIC)
         return;
-    fm1_clk_snapshot(blog.clkl);
-    if (blog.w) {                                 /* the same start as the last line: fold it, "(xN)" */
+    if (blog.w) {                                 /* the same start as the last line: fold it, "xN" */
         char *p = blog.line[(blog.w - 1u) % BLE_LOG_N];
         for (i = 0; i < 5u && s[i] && s[i] == p[i]; i++)
             ;
@@ -110,7 +83,6 @@ void shim_log(const char *s)
             while (k)
                 p[i++] = num[--k];
             p[i] = 0;
-            blog.count++;
             return;
         }
     }
@@ -119,7 +91,6 @@ void shim_log(const char *s)
         d[i] = s[i] >= 32 && s[i] < 127 ? s[i] : ' ';
     d[i] = 0;
     blog.w++;
-    blog.count++;
 }
 static void hex8(char *b, uint32_t v)
 {
@@ -127,119 +98,63 @@ static void hex8(char *b, uint32_t v)
     for (i = 0; i < 8; i++)
         b[i] = "0123456789ABCDEF"[(v >> (28 - 4 * i)) & 15u];
 }
-/* probe: is an interrupt of priority `prio` taken while cli holds? Soft interrupt 0 is raised with
- * interrupts off, then on. Result: bit 0 = it fired under cli, bit 1 = it fired after sti. */
-static volatile uint32_t soft_hits;
-void fm1_soft0_irq(void) { fm1_irq_soft_clr(0); soft_hits++; }
-extern void isr_soft0(void);
-static uint32_t nmi_probe(uint32_t prio)
+static char *put_dec(char *b, uint32_t v)
 {
-    uint32_t f = irq_save(), a, b;
-    fm1_guard_unlock_top();
-    fm1_irq_attach(FM1_IRQ_SOFT0, isr_soft0, prio);
-    fm1_guard_lock_top();
-    soft_hits = 0;
-    fm1_irq_soft_set(0);
-    fm1_delay_us(20);
-    a = soft_hits;
-    irq_restore(f);
-    fm1_delay_us(20);
-    b = soft_hits;
-    f = irq_save();
-    fm1_irq_mask(FM1_IRQ_SOFT0);
-    fm1_irq_soft_clr(0);
-    irq_restore(f);
-    return (a ? 1u : 0u) | (b ? 2u : 0u);
-}
-/* "ipm _ p7 _ p6 _ icfg ________": IPMASK, the probe at 7 and 6, icfg as the main loop sees it */
-static void ble_env_line(char *o)
-{
-    const char *t = "ipm _ p7 _ p6 _ icfg ________";
-    uint32_t i;
-    for (i = 0; t[i]; i++)
-        o[i] = t[i];
-    o[i] = 0;
-    o[4] = (char)('0' + (fm1_ipmask() & 15u));
-    blog.probe = nmi_probe(7);
-    fm1_clk_snapshot(blog.clk0);
-    {
-        uint32_t k;
-        for (k = 0; k < 10u; k++)
-            blog.ana[k] = fm1_p33_read(k);
-    }
-    o[9] = (char)('0' + blog.probe);
-    o[14] = (char)('0' + nmi_probe(6));
-    hex8(o + 21, fm1_icfg());
+    char t[12];
+    int n = 0;
+    do {
+        t[n++] = (char)('0' + v % 10u);
+        v /= 10u;
+    } while (v);
+    while (n)
+        *b++ = t[--n];
+    *b = 0;
+    return b;
 }
 
-/* at boot: what ended the last BLE run (seven lines fit the screen; no two may share their first
- * five characters, or shim_log folds them) */
-static void hex8s(char *o, const char *t, const uint32_t *v, int n)   /* t with n "________" slots */
-{
-    int i, k = 0;
-    for (i = 0; t[i]; i++)
-        o[i] = t[i];
-    o[i] = 0;
-    for (i = 0; t[i] && k < n; i++)
-        if (t[i] == '_' && t[i + 1] == '_') {
-            hex8(o + i, v[k++]);
-            i += 7;
-        }
-}
+/* at boot: what ended the last run. The crash note: the fault's pc, vector and debug register, its
+ * return address and how long Bluetooth had run, and the core's last four branches (ETM). */
+static uint8_t ble_last_bad;                      /* the last BT run ended in a crash or a watchdog reset */
 static void ble_boot_note(void)
 {
     char b[40];
-    uint32_t v[4];
-    if (fm1_crash.magic == FM1_CRASH_MAGIC && (blog.magic != BLE_LOG_MAGIC || blog.w > 100000u)) {
+    int crashed = fm1_crash.magic == FM1_CRASH_MAGIC && fm1_crash.count != blog.crash_seen;
+    if (blog.magic != BLE_LOG_MAGIC || blog.w > 100000u) {
+        if (!crashed)
+            return;
         blog.magic = BLE_LOG_MAGIC;               /* a crash with Bluetooth never started: note it too */
-        blog.w = blog.count = blog.running = blog.probe = blog.t0_up = 0;
-        blog.crash_seen = fm1_crash.count - 1u;
-        memset(blog.ana, 0, sizeof blog.ana);
-        memset(blog.pnd_seen, 0, sizeof blog.pnd_seen);
+        blog.w = blog.running = blog.t0_up = 0;
     }
-    if (blog.magic != BLE_LOG_MAGIC || blog.w > 100000u)
-        return;
-    if (fm1_crash.magic == FM1_CRASH_MAGIC && fm1_crash.count != blog.crash_seen) {
-        uint32_t n = shim_isr_trace.n, *e = shim_isr_trace.ring[n & 15u];
+    if (crashed) {
+        char *q;
         blog.crash_seen = fm1_crash.count;
-        v[0] = fm1_crash.pc;
-        v[1] = fm1_crash.dbg;
-        hex8s(b, "pc ________ v## dbg ________ p7#", v, 2);        /* p7: the probe at the start, 1|3 = fires under cli */
-        b[13] = (char)('0' + fm1_crash.vec / 10 % 10);
-        b[14] = (char)('0' + fm1_crash.vec % 10);
-        b[31] = (char)('0' + (blog.probe & 7u));
+        q = put_dec(b + 6, fm1_crash.vec);
+        b[0] = 'c'; b[1] = 'r'; b[2] = 'a'; b[3] = 's'; b[4] = 'h'; b[5] = ' ';
+        q[0] = ' '; q[1] = 'p'; q[2] = 'c'; q[3] = ' ';
+        hex8(q + 4, fm1_crash.pc);
+        q[12] = ' '; q[13] = 'd'; q[14] = ' ';
+        hex8(q + 15, fm1_crash.dbg);
+        q[23] = 0;
         shim_log(b);
-        hex8s(b, "pnd ________ ________ ________", fm1_crash.ipnd, 3);              /* IRQ 0..31, 32..63, 96..127 */
+        b[0] = 'r'; b[1] = 'e'; b[2] = 't'; b[3] = ' ';
+        hex8(b + 4, fm1_crash.rets);
+        b[12] = ' '; b[13] = 'm'; b[14] = 's'; b[15] = ' ';
+        put_dec(b + 16, blog.running ? fm1_crash.uptime_ms - blog.t0_up : 0u);
         shim_log(b);
-        {   /* P33 ANA_CON0..9 at the start (the SDK's BLE board: CON6 low bits 3 = VDC14 1.40 V, CON9 low bits 11 = SYSVDD 1.26 V) */
-            char a[40] = "ana ";
-            uint32_t k;
-            for (k = 0; k < 10u; k++) {
-                a[4 + 3 * k] = "0123456789ABCDEF"[blog.ana[k] >> 4];
-                a[5 + 3 * k] = "0123456789ABCDEF"[blog.ana[k] & 15u];
-                a[6 + 3 * k] = ' ';
-            }
-            a[4 + 3 * 10 - 1] = 0;
-            shim_log(a);
-        }
-        v[0] = shim_delay_from;                                                     /* the last delay() call site, how many, ms into the run */
-        v[1] = shim_delay_n;
-        v[2] = fm1_crash.uptime_ms - blog.t0_up;
-        hex8s(b, "dly ________ n ________ ms ________", v, 3);
+        b[0] = 'e'; b[1] = ' ';
+        hex8(b + 2, fm1_crash.etm[0]);
+        b[10] = ' ';
+        hex8(b + 11, fm1_crash.etm[1]);
+        b[19] = ' ';
+        hex8(b + 20, fm1_crash.etm[2]);
+        b[28] = ' ';
+        hex8(b + 29, fm1_crash.etm[3]);
+        b[37] = 0;
         shim_log(b);
-        hex8s(b, "seen ________ ________ ________ ________", blog.pnd_seen, 4);   /* pending bits seen, IRQ 0..127 */
-        shim_log(b);
-        hex8s(b, "e01 ________ ________ bt ________", fm1_crash.etm, 2);
-        hex8(b + 25, n);
-        shim_log(b);
-        v[0] = fm1_crash.etm[2];
-        v[1] = fm1_crash.etm[3];
-        v[2] = e[0];
-        hex8s(b, "e23 ________ ________ ri ________", v, 3);
-        shim_log(b);
-    } else if (blog.running) {
-        shim_log("reset, no crash: watchdog?");
+    } else if (blog.running && (fm1_boot.p3_rst & 4u)) {
+        shim_log("reset by the watchdog");
     }
+    ble_last_bad = (uint8_t)(blog.running && (crashed || (fm1_boot.p3_rst & 4u)));
     blog.running = 0;
 }
 
@@ -364,18 +279,8 @@ void shim_bt_event(int from, const void *event, int len)
     const struct bt_event_s *e = event;
     (void)len;
     ble_events++;
-    {
-        char b[40] = "event from ";
-        b[11] = (char)('0' + (from & 7));
-        b[12] = ' ';
-        b[13] = 'e';
-        b[14] = (char)('0' + (e ? e->event / 10 % 10 : 0));
-        b[15] = (char)('0' + (e ? e->event % 10 : 0));
-        b[16] = 0;
-        shim_log(b);
-    }
     if (from == 3 && e && e->event == 3 && ble_state == BLE_STARTING) {   /* BT_EVENT_FROM_CON, BT_STATUS_INIT_OK */
-        shim_log("BT init ok: starting BLE");
+        shim_log("BT ready: advertising as FM-1");
         bt_ble_init();
         ble_state = BLE_READY;
     }
@@ -402,6 +307,12 @@ const uint8_t *bt_get_mac_addr(void)
 }
 
 static uint32_t ble_t0;
+/* BLE_MASK_AT_START: mask the input timer while the radio calibrates. fm1-ble needed it while the RF
+ * trim ran from the flash (the real cause of its crashes, notes/06); with the trim in RAM it should
+ * not be, and without it keys, USB and the screen do not pause when Bluetooth starts. */
+#ifndef BLE_MASK_AT_START
+#define BLE_MASK_AT_START 0
+#endif
 static uint8_t irqs_masked;
 static void ble_irqs_back(const char *why)
 {
@@ -434,30 +345,19 @@ static void ble_start(void)
     if (fm1_crash.magic != FM1_CRASH_MAGIC)
         fm1_crash.count = 0;
     blog.magic = BLE_LOG_MAGIC;
-    blog.w = blog.count = 0;
+    blog.w = 0;
     blog.crash_seen = fm1_crash.count;
     blog.running = 1;
-    ble_t0 = fm1_uptime_ms();
+    ble_t0 = blog.t0_up = fm1_uptime_ms();
     shim_log("BT: starting");
+#if BLE_MASK_AT_START
     {
-        char e[40];
-        ble_env_line(e);
-        shim_log(e);
-    }
-    shim_isr_trace.n = 0;
-    shim_delay_n = 0;
-    memset(blog.pnd_seen, 0, sizeof blog.pnd_seen);
-    shim_delay_from = 0;
-    blog.t0_up = fm1_uptime_ms();
-    {   /* no input-timer interrupt while the radio calibrates (ble_poll gives it back): every crash in
-         * fm1-ble was an interrupt vectoring wrong during the calibration (notes/05). Keys, USB and
-         * the screen pause for about a second. */
         uint32_t f = irq_save();
         fm1_irq_mask(FM1_IRQ_TIMER5);
         irq_restore(f);
         irqs_masked = 1;
-        shim_log("timer irq masked");
     }
+#endif
     shim_os_init();
     fm1_guard_stack_floor(shim_stacks_lo());      /* the tasks' stacks are in the pool */
     lmp_set_sniff_disable();
@@ -488,26 +388,19 @@ static void ble_poll(void)
         ble_irqs_back("irqs back: BT ready");
     else if (fm1_uptime_ms() - ble_t0 > 15000u)
         ble_irqs_back("irqs back: 15 s, not ready");
-    {   /* every two seconds while running: BLE interrupts taken, stack events seen */
-        static uint32_t t2;
-        if (ble_state == BLE_READY && fm1_uptime_ms() - t2 > 2000u) {
-            char b[40] = "irq ________ c_ rx ________ tx ________";
-            t2 = fm1_uptime_ms();
-            hex8(b + 4, shim_isr_trace.n);
-            b[14] = (char)('0' + ble_midi_connected());
-            hex8(b + 19, ble_rx_count);
-            hex8(b + 31, ble_tx_count);
-            shim_log(b);
-        }
-    }
-    {   /* every half second: the tasks' deepest stack, kept for after a crash */
-        static uint32_t t;
+    {   /* ten seconds after it is ready, once: the tasks' deepest stack so far (sizing; 8 KiB each) */
+        static uint8_t said;
         extern int shim_stack_depth(int task);
-        if (fm1_ms - t > 500u) {
+        if (ble_state == BLE_READY && !said && fm1_uptime_ms() - ble_t0 > 10000u) {
+            char b[40] = "stacks ", *q = b + 7;
             int k;
-            t = fm1_ms;
-            for (k = 0; k < 3; k++)
-                blog.depth[k] = (uint8_t)shim_stack_depth(k + 1);
+            said = 1;
+            for (k = 1; k <= 3; k++) {
+                q = put_dec(q, (uint32_t)shim_stack_depth(k) * 256u);
+                *q++ = k < 3 ? ' ' : 0;
+            }
+            q[-1] = 0;
+            shim_log(b);
         }
     }
 }

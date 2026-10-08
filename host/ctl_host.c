@@ -270,9 +270,10 @@ static void boot(void)
 {
     project_load();
     lcd_fill(0, 0, 240, 240, 0);
-    ble_state = BLE_OFF;                   /* Bluetooth is off at every boot */
+    ble_state = BLE_OFF;                   /* Bluetooth starts at every boot, as on the device */
     ble_conn = 0;
     ui_init();
+    plat_ble_start();
 }
 
 static void run_ms(uint32_t ms)

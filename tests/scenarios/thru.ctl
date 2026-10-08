@@ -8,8 +8,7 @@ tap GLO
 tap GLO
 tap GLO
 expect view 6
-spin K1 1
-expect ble 1
+# Bluetooth started at boot
 wait 1100
 expect ble 2
 ble connect
