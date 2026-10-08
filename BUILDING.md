@@ -65,8 +65,8 @@ tests/run_tests.sh
 
 Runs, on the build machine: the encoder and TRS parsers; flash storage (and the object map); Felucca's
 update-path tests against `build/ctl.fwsc`; the browser build in Node (`tests/host/emu_test.mjs`);
-and the whole app in the simulator (`tests/scenarios/*.ctl`: notes, controllers, MIDI thru,
-Bluetooth, persistence), with screenshots and the MIDI sent in `build/scenarios/`.
+and the whole app in the simulator (`tests/scenarios/*.ctl`: notes, banks, scales, the arpeggiator,
+the sequencer and clock, MIDI thru, Bluetooth, persistence), with screenshots and the MIDI sent in `build/scenarios/`.
 
 `host/build_host.sh` builds the simulator alone; `build/host/ctl_host SCRIPT OUTDIR` runs one
 script (the command list is at the top of `host/ctl_host.c`). The simulator's Bluetooth is a

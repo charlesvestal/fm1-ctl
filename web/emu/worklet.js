@@ -43,6 +43,7 @@ class Ctl extends AudioWorkletProcessor {
         this.ex.web_store_set_len(+obj, b.length);
       }
       this.sentWrites = this.ex.web_store_writes();
+      this.ex.web_master(m.master ?? 0);
       this.ex.web_boot();
       this.port.postMessage({ type: "ready" });
     } else if (!this.ex) {
@@ -53,6 +54,8 @@ class Ctl extends AudioWorkletProcessor {
       this.ex.web_keys(m.mask >>> 0);
     } else if (m.type === "enc") {
       this.ex.web_enc(m.role, m.n | 0);
+    } else if (m.type === "master") {
+      this.ex.web_master(m.value | 0);
     } else if (m.type === "midi") {
       this.ex.web_midi_in(m.port | 0, m.pkt >>> 0);
     }
@@ -61,7 +64,8 @@ class Ctl extends AudioWorkletProcessor {
   publish() {
     const ex = this.ex;
     const blits = ex.web_blits();
-    const msg = { type: "frame", buttons: ex.web_lit_buttons() >>> 0, keys: ex.web_lit_keys() >>> 0 };
+    const msg = { type: "frame", buttons: ex.web_lit_buttons() >>> 0, keys: ex.web_lit_keys() >>> 0,
+                  dimButtons: ex.web_dim_buttons() >>> 0, dimKeys: ex.web_dim_keys() >>> 0 };
     if (this.frames >= 44100) {                       // the share of real time spent running the device
       msg.load = Math.round(100 * this.busy / (this.frames / 44.1));
       this.busy = this.frames = 0;

@@ -33,6 +33,9 @@ a { color: var(--accent); }
 .ctl.knob { cursor: ns-resize; }
 .btnface { transition: fill .06s; }
 .lit .btnface { fill: #f28a5a; }
+.dim .btnface { fill: #5a4238; }
+.dim .keyface.white { fill: #e8d2c4; }
+.dim .keyface.black { fill: #8fb8b2; }
 .lit text.btn { fill: #2a140a; }
 .held .btnface, .held .keyface { stroke: #f28a5a; stroke-width: 3; }
 .latched .btnface { stroke: #6fc3ff; stroke-width: 3; }
@@ -81,14 +84,27 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 
 <section class="help">
   <div>
-    <h2>Buttons</h2>
+    <h2>Playing</h2>
     <ul>
-      <li><b>Keys</b> play notes, F3 to G5. <b>OCT−</b> / <b>OCT+</b> move them an octave.</li>
-      <li><b>KNOB 1–4</b> send four controllers (74, 71, 1 and 7 at first). <b>GLO</b> opens Setup, where the knobs choose the numbers.</li>
-      <li><b>SELECT</b> velocity, <b>ALGORITHM</b> MIDI channel, <b>PRESETS</b> program change.</li>
-      <li><b>ARP</b> held: sustain. <b>ENV</b> / <b>LFO</b> held: pitch bend down / up.</li>
-      <li><b>PLAY</b> sends start / stop. <b>REC</b> sends all notes off.</li>
-      <li>Pages: <b>HOME</b> play, <b>GLO</b> setup, <b>SEL</b> Bluetooth. <b>EDIT</b> steps through them. <b>SAVE</b> saves.</li>
+      <li><b>Keys</b> play notes, F3 to G5. <b>OCT−</b> / <b>OCT+</b> move them an octave. <b>ENV</b> held: sustain.</li>
+      <li><b>KNOB 1–4</b> send four controllers; <b>FX</b> steps through four banks of them (A to D).</li>
+      <li><b>SELECT</b> tempo, <b>ALGORITHM</b> MIDI channel, <b>PRESETS</b> program change. <b>REC</b> sends all notes off.</li>
+      <li><b>MASTER</b> can send a controller too (Setup, KNOB 3).</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Scale and arpeggiator</h2>
+    <ul>
+      <li><b>SEL</b>: the Scale page. With a scale, the white keys play its steps and the black keys its chords.</li>
+      <li><b>ARP</b> turns the arpeggiator on: hold notes or chords. <b>LFO</b>: its page (mode, rate, octaves, latch).</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Sequencer</h2>
+    <ul>
+      <li><b>SEQ</b>: four drum tracks on channel 10. KNOB 1–4: steps, hits, rotation, note (the hits spread evenly).</li>
+      <li>On this page the white keys toggle the selected track's steps; black keys 1–4 pick a track, 5–8 mute one.</li>
+      <li><b>PLAY</b> starts and stops it, and sends MIDI start / stop and clock (Setup: the clock source).</li>
     </ul>
   </div>
   <div>
@@ -96,24 +112,15 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
     <ul>
       <li>Pick a <b>MIDI out</b> port to play a synth or your DAW from this page (Chrome and Edge have Web MIDI).</li>
       <li>A <b>MIDI in</b> port arrives as the FM-1's USB: it is passed on to Bluetooth and lights the keys.</li>
-      <li>On the FM-1, everything played goes to USB and Bluetooth; the TRS jack (MIDI in) goes to both.</li>
       <li>Bluetooth here is a stand-in: it starts, but nothing can connect to a web page.</li>
     </ul>
   </div>
   <div>
-    <h2>Mouse and touch</h2>
+    <h2>Mouse, touch, keyboard</h2>
     <ul>
-      <li>Drag a knob up or down, or use the scroll wheel over it.</li>
-      <li>Click or touch buttons and keys. Several fingers at once work on a touch screen.</li>
-      <li><kbd>Shift</kbd>-click (or right-click) a button to hold it down, click again to let go.</li>
-    </ul>
-  </div>
-  <div>
-    <h2>Keyboard</h2>
-    <ul>
-      <li>Notes like a piano: <kbd>A</kbd> is the lowest key (F), <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … up to <kbd>'</kbd>.</li>
-      <li><kbd>Z</kbd> / <kbd>X</kbd> OCT− / OCT+, <kbd>Shift</kbd> sustain, <kbd>1</kbd> / <kbd>2</kbd> bend down / up.</li>
-      <li><kbd>Space</kbd> start / stop, <kbd>Backspace</kbd> all notes off, <kbd>Esc</kbd> HOME, <kbd>↑</kbd> <kbd>↓</kbd> velocity.</li>
+      <li>Drag a knob up or down, or scroll over it. <kbd>Shift</kbd>-click a button to hold it.</li>
+      <li>Notes like a piano: <kbd>A</kbd> is the lowest key, <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … up to <kbd>'</kbd>.</li>
+      <li><kbd>Z</kbd> / <kbd>X</kbd> octave, <kbd>Shift</kbd> sustain, <kbd>1</kbd> ARP, <kbd>2</kbd> FX, <kbd>Space</kbd> PLAY, <kbd>Backspace</kbd> REC, <kbd>Esc</kbd> HOME, <kbd>↑</kbd> <kbd>↓</kbd> tempo.</li>
     </ul>
   </div>
 </section>
@@ -215,17 +222,18 @@ function hit(c, cls) {
   c.hit = d;
 }
 // what each control does, on hover (the Buttons list below says the same)
-const TIP = { SEL: "Bluetooth page", ENV: "Hold: pitch bend down", LFO: "Hold: pitch bend up", EDIT: "Next page",
-  GLO: "Setup page: the knobs' controller numbers", HOME: "Play page", SAVE: "Save", ARP: "Hold: sustain", PLAY: "MIDI start / stop",
-  REC: "All notes off", "OCT-": "Keys an octave down", "OCT+": "Keys an octave up", SELECT: "Velocity", ALGORITHM: "MIDI channel",
-  PRESETS: "Program change", MASTER: "Not used", KNOB1: "Controller 1", KNOB2: "Controller 2", KNOB3: "Controller 3", KNOB4: "Controller 4" };
+const TIP = { FX: "Next knob bank (A to D)", SEL: "Scale page", ENV: "Hold: sustain", LFO: "Arpeggiator page", EDIT: "Next page",
+  GLO: "Knobs, then Setup, then Bluetooth", HOME: "Play page", SAVE: "Save", ARP: "Arpeggiator on / off", SEQ: "Sequencer page",
+  PLAY: "Start / stop", REC: "All notes off", "OCT-": "Keys an octave down", "OCT+": "Keys an octave up", SELECT: "Tempo",
+  ALGORITHM: "MIDI channel", PRESETS: "Program change", MASTER: "A controller, if Setup gives it one",
+  KNOB1: "The page's first value", KNOB2: "The page's second value", KNOB3: "The page's third value", KNOB4: "The page's fourth value" };
 for (const [n, c] of [...Object.entries(buttons), ...Object.entries(knobs)]) if (TIP[n]) c.g.setAttribute("aria-description", TIP[n]);
 for (const k of Object.values(knobs)) hit(k, "knob");
 for (const b of Object.values(buttons)) hit(b);
 keys.forEach((k) => hit(k));
 
 // ---------------------------------------------------------------- state and input
-let node = null, btnMask = 0, keyMask = 0, latched = 0;
+let node = null, btnMask = 0, keyMask = 0, latched = 0, master = 0;
 const btnHeldBy = new Map(), keyHeldBy = new Map();      // pointer / key id -> bit
 function send(m) { if (node) node.port.postMessage(m); }
 function syncButtons() {
@@ -280,7 +288,9 @@ function drawKnob(k) {
 function turn(k, n) {
   if (!n) return;
   if (k.role === "master") {
-    return;                                            // Ctl does not use MASTER
+    master = Math.max(0, Math.min(4096, master + n * 64));
+    k.angle = -135 + 270 * master / 4096;
+    send({ type: "master", value: master });
   } else {
     k.angle = (k.angle + n * 18) % 360;
     send({ type: "enc", role: k.role, n });
@@ -298,7 +308,7 @@ for (const k of Object.values(knobs)) {
     if (!drag) return;
     drag.acc += drag.y - e.clientY;
     drag.y = e.clientY;
-    const step = 7;
+    const step = k.role === "master" ? 3 : 7;
     const n = Math.trunc(drag.acc / step);
     if (n) { drag.acc -= n * step; turn(k, n); }
   });
@@ -323,8 +333,8 @@ const KEYMAP = {};
 // a piano on the computer keyboard, from the lowest key (F): white keys on the home row, black above
 ["KeyA", "KeyW", "KeyS", "KeyE", "KeyD", "KeyR", "KeyF", "KeyG", "KeyY", "KeyH", "KeyU", "KeyJ", "KeyK", "KeyO", "KeyL", "KeyP",
  "Semicolon", "BracketLeft", "Quote"].forEach((c, i) => KEYMAP[c] = { key: i });
-Object.assign(KEYMAP, { Space: { btn: BTN.PLAY }, Backspace: { btn: BTN.REC }, ShiftLeft: { btn: BTN.ARP }, ShiftRight: { btn: BTN.ARP },
-                        Digit1: { btn: BTN.ENV }, Digit2: { btn: BTN.LFO }, Escape: { btn: BTN.HOME },
+Object.assign(KEYMAP, { Space: { btn: BTN.PLAY }, Backspace: { btn: BTN.REC }, ShiftLeft: { btn: BTN.ENV }, ShiftRight: { btn: BTN.ENV },
+                        Digit1: { btn: BTN.ARP }, Digit2: { btn: BTN.FX }, Escape: { btn: BTN.HOME },
                         KeyZ: { btn: BTN["OCT-"] }, KeyX: { btn: BTN["OCT+"] } });
 addEventListener("keydown", (e) => {
   if (!node || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -361,9 +371,15 @@ function drawScreen(fb) {
   }
   ctx.putImageData(img, 0, 0);
 }
-function drawLights(b, k) {
-  for (const x of Object.values(buttons)) x.g.classList.toggle("lit", !!(b & (1 << x.bit)));
-  keys.forEach((x, i) => x.g.classList.toggle("lit", !!(k & (1 << i))));
+function drawLights(b, k, db = 0, dk = 0) {
+  for (const x of Object.values(buttons)) {
+    x.g.classList.toggle("lit", !!(b & (1 << x.bit)));
+    x.g.classList.toggle("dim", !(b & (1 << x.bit)) && !!(db & (1 << x.bit)));
+  }
+  keys.forEach((x, i) => {
+    x.g.classList.toggle("lit", !!(k & (1 << i)));
+    x.g.classList.toggle("dim", !(k & (1 << i)) && !!(dk & (1 << i)));
+  });
 }
 
 // ---------------------------------------------------------------- storage
@@ -400,14 +416,14 @@ async function switchOn() {
         if (m.type === "ready") res();
         else if (m.type === "frame") {
           if (m.fb) drawScreen(m.fb);
-          drawLights(m.buttons, m.keys);
+          drawLights(m.buttons, m.keys, m.dimButtons, m.dimKeys);
           window.ctlLast = m;
           if (m.load !== undefined) cpu.textContent = `Ctl uses ${m.load}% of this computer's time`;
           if (m.store) saveStore(m.store);
         } else if (m.type === "midi") midiOut(m.pkts);
       };
     });
-    node.port.postMessage({ type: "load", wasm, store: loadStore() }, [wasm]);
+    node.port.postMessage({ type: "load", wasm, store: loadStore(), master }, [wasm]);
     await ready;
     await ac.resume();
     document.getElementById("start").hidden = true;

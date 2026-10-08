@@ -25,6 +25,11 @@ void fm1_timer5_irq(void)
         usb_poll();
         uart_midi_poll();
     }
+    if (sub == 0u) {                                /* 1 kHz: the clock, arpeggiator and sequencer */
+        in_tick = 1;
+        engine_tick();
+        in_tick = 0;
+    }
     if (++sub == 10u)
         sub = 0;
     {
@@ -186,6 +191,7 @@ static void fm1_main(void)
     }
     ct_dbg.boots++;
     fm1_input_init();
+    fm1_adc_init();
     panel_init();
     led_pos_init();
     project_load();                                 /* defaults when nothing (or another format) is saved */
@@ -240,6 +246,14 @@ static void fm1_main(void)
         cdc_task();
 #endif
         ble_poll();                                 /* Bluetooth's tasks, once started */
+        {   /* MASTER: smoothed, 0..4096 (the UI sends it as a controller when asked to) */
+            static int32_t knob = -1;
+            int32_t a = fm1_adc_read(FM1_ADC_MASTER);
+            if (a >= 0) {
+                knob = knob < 0 ? a * 16 : knob + (a * 16 - knob) / 8;
+                master_q12 = (uint32_t)(knob / 4);
+            }
+        }
         if (fm1_ms - last_frame >= 16u) {           /* ~60 frames/s at most; input in between */
             last_frame = fm1_ms;
             ct_dbg.ui_frames++;

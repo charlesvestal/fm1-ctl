@@ -37,19 +37,50 @@ static void led_pos_init(void)
                     led_pos[id] = (uint8_t)((p << 3) | r);
     }
 }
-void plat_leds(uint32_t buttons, uint32_t keys)
+/* Glow: the dim lights on one scan frame in 6 (low) or 3 (high) */
+void plat_leds(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t dim_keys, int glow)
 {
-    uint8_t nl[FM1_NCOL] = {0};
+    static const uint8_t DIV[3] = {0, 6, 3};
+    uint8_t nl[FM1_NCOL] = {0}, dl[FM1_NCOL] = {0};
     uint32_t i, c;
     for (i = 0; i < NB + NKEYS; i++) {
         uint32_t id = i < NB ? panel.btn[i] : 14u + (i - NB);
         int on = i < NB ? (buttons >> i) & 1u : (keys >> (i - NB)) & 1u;
+        int dim = i < NB ? (dim_buttons >> i) & 1u : (dim_keys >> (i - NB)) & 1u;
         uint8_t q = led_pos[id];
-        if (on && q != 0xFF)
+        if (q == 0xFF)
+            continue;
+        if (on)
             nl[q >> 3] |= (uint8_t)(1u << (q & 7u));
+        else if (dim)
+            dl[q >> 3] |= (uint8_t)(1u << (q & 7u));
     }
-    for (c = 0; c < FM1_NCOL; c++)
+    for (c = 0; c < FM1_NCOL; c++) {
         fm1_led[c] = nl[c];
+        fm1_led_dim[c] = dl[c];
+    }
+    fm1_led_dim_div = DIV[glow < 0 || glow > 2 ? 0 : glow];
+}
+
+/* MASTER: the pot, read in the main loop (main_fm1.c) */
+static volatile uint32_t master_q12;
+uint32_t plat_master(void) { return master_q12; }
+
+/* the 1 kHz tick (engine_tick) runs in the TIMER5 interrupt: the main loop locks it out around what
+ * they share. The lock nests (the engine sends MIDI while holding it, and sending locks too);
+ * MIDI sent from the tick itself needs no lock (nothing that sends interrupts it). */
+static volatile uint8_t in_tick;
+static uint32_t lock_depth;
+uint32_t plat_lock(void)
+{
+    fm1_irq_off();
+    return lock_depth++;
+}
+void plat_unlock(uint32_t f)
+{
+    (void)f;
+    if (lock_depth && --lock_depth == 0)
+        fm1_irq_on();
 }
 
 /* MIDI: Felucca's rings carry 4-byte USB-MIDI event packets, byte 0 = cable / CIN. USB and the TRS
@@ -73,12 +104,17 @@ int plat_midi_in(uint32_t *pkt, int *port)
     }
     return 0;
 }
-void plat_midi_send(uint32_t pkt, uint32_t to)
+void plat_midi_send(uint32_t pkt, uint32_t to)   /* the main loop's and the tick's rings are shared */
 {
+    uint32_t f = 0;
+    if (!in_tick)
+        f = plat_lock();
     if (to & TO_USB)
         midi_out_event(pkt);
     if (to & TO_BLE)
         ble_midi_tap(pkt);
+    if (!in_tick)
+        plat_unlock(f);
 }
 
 int plat_store_load(uint32_t obj, void *dst, uint32_t max) { return flash_ok ? st_load(obj, dst, max) : -1; }

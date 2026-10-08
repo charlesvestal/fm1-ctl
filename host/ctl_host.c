@@ -13,10 +13,11 @@
  *   turn ENC N [MS]              (ENC: SELECT ALGO PRESET K1 K2 K3 K4; N detents, MS apart, default 80)
  *   spin ENC N                   N detents at once, exactly N (no acceleration)
  *   midi PORT B0 B1 B2           incoming MIDI message (PORT: USB BLE TRS; hex bytes)
+ *   master N                     MASTER pot 0..4096
  *   ble connect | ble disconnect a central (the simulated stack must be ready)
  *   shot FILE.png                save the screen
- *   leds                         print the lit buttons and keys
- *   out                          print the MIDI sent since the last "out" (and forget it)
+ *   leds                         print the lit buttons and keys (keys: # bright, + dim)
+ *   out                          print the MIDI sent since the last "out" (and forget it; clocks not shown)
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
  *   expect_out PORT B0 B1 B2     check that this message went out to PORT since the last "out"
  *   reboot                       re-run boot from the simulated flash (persistence test)
@@ -56,9 +57,10 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 /* ---------------------------------------------------------- platform --- */
 #include "../firmware/src/app/plat.h"
 
-static uint32_t now_ms, held_btn, held_keys;
+static uint32_t now_ms, held_btn, held_keys, master = 0;
 static int32_t enc_acc[NE];
-static uint32_t lit_btn, lit_keys;
+static uint32_t lit_btn, lit_keys, dim_btn, dim_keys;
+static int glow_level;
 
 uint32_t plat_ms(void) { return now_ms; }
 uint32_t plat_buttons(void) { return held_btn; }
@@ -69,11 +71,17 @@ int32_t plat_enc(int role)
     enc_acc[role] = 0;
     return v;
 }
-void plat_leds(uint32_t b, uint32_t k)
+uint32_t plat_master(void) { return master; }
+void plat_leds(uint32_t b, uint32_t k, uint32_t db, uint32_t dk, int glow)
 {
     lit_btn = b;
     lit_keys = k;
+    dim_btn = glow ? db & ~b : 0;
+    dim_keys = glow ? dk & ~k : 0;
+    glow_level = glow;
 }
+uint32_t plat_lock(void) { return 0; }
+void plat_unlock(uint32_t f) { (void)f; }
 
 /* MIDI: one queue in (tagged with the port), a record of what went out */
 #define MQ 256
@@ -167,6 +175,7 @@ int plat_store_save(uint32_t obj, const void *src, uint32_t len)
 /* -------------------------------------------------------------- app --- */
 #include "../firmware/src/app/app.h"
 #include "../firmware/src/app/project.c"
+#include "../firmware/src/app/engine.c"
 #include "../firmware/src/app/ui.c"
 
 /* ---------------------------------------------------------- outputs --- */
@@ -271,6 +280,7 @@ static void run_ms(uint32_t ms)
     for (i = 0; i < ms; i++) {
         now_ms++;
         ble_tick();
+        engine_tick();                     /* the device's 1 kHz tick */
         if (now_ms >= ui_due) {
             ui_due = now_ms + 16;
             ui_frame();
@@ -328,10 +338,42 @@ static int expect(const char *what, const char *val)
         got = (int)midi_out_count;
     else if (!strcmp(what, "ble"))
         got = ble_state;
+    else if (!strcmp(what, "bank"))
+        got = proj.bank;
+    else if (!strcmp(what, "tempo"))
+        got = proj.tempo;
+    else if (!strcmp(what, "arp"))
+        got = proj.arp_on;
+    else if (!strcmp(what, "scale"))
+        got = proj.scale;
+    else if (!strcmp(what, "track"))
+        got = ui.track;
+    else if (!strncmp(what, "pat", 3))            /* patN: track N's step bits */
+        got = proj.trk[atoi(what + 3) & 3].pat;
+    else if (!strncmp(what, "mute", 4))
+        got = proj.trk[atoi(what + 4) & 3].mute;
+    else if (!strcmp(what, "clocks_out")) {       /* MIDI clocks sent since the last "out" */
+        uint32_t i;
+        got = 0;
+        for (i = 0; i < n_out; i++)
+            got += ((out_pkt[i] >> 8) & 0xFF) == 0xF8;
+    } else if (!strcmp(what, "notes_out")) {     /* note-ons sent since the last "out" */
+        uint32_t i;
+        got = 0;
+        for (i = 0; i < n_out; i++)
+            got += ((out_pkt[i] >> 8) & 0xF0) == 0x90 && (out_pkt[i] >> 24);
+    } else if (!strcmp(what, "notes_on")) {      /* note-ons minus note-offs since the last "out" */
+        uint32_t i;
+        got = 0;
+        for (i = 0; i < n_out; i++) {
+            uint32_t st = (out_pkt[i] >> 8) & 0xF0;
+            got += st == 0x90 && (out_pkt[i] >> 24) ? 1 : st == 0x80 || st == 0x90 ? -1 : 0;
+        }
+    }
     else if (!strncmp(what, "cc", 2))             /* ccN: knob N's controller number */
-        got = proj.cc[atoi(what + 2) & 3];
+        got = proj.cc[proj.bank][atoi(what + 2) & 3];
     else if (!strncmp(what, "val", 3))            /* valN: knob N's value */
-        got = proj.val[atoi(what + 3) & 3];
+        got = proj.val[proj.bank][atoi(what + 3) & 3];
     else {
         printf("FAIL unknown expect %s\n", what);
         return 1;
@@ -444,6 +486,9 @@ int main(int argc, char **argv)
             accel_off = 1;
             run_ms(1);
             accel_off = 0;
+        } else if (!strcmp(cmd, "master")) {
+            master = (uint32_t)atoi(a);
+            run_ms(40);
         } else if (!strcmp(cmd, "midi")) {
             int p = find_name(PORT_N, NPORTS, a);
             if (p < 0) {
@@ -474,14 +519,19 @@ int main(int argc, char **argv)
             for (i = 0; i < NB; i++)
                 if (lit_btn >> i & 1u)
                     printf(" %s", BTN_N[i]);
+            printf(" | dim");
+            for (i = 0; i < NB; i++)
+                if (dim_btn >> i & 1u)
+                    printf(" %s", BTN_N[i]);
             printf(" | keys ");
             for (i = 0; i < NKEYS; i++)
-                printf("%c", (lit_keys >> i & 1u) ? '#' : '.');
+                printf("%c", (lit_keys >> i & 1u) ? '#' : (dim_keys >> i & 1u) ? '+' : '.');
             printf("\n");
         } else if (!strcmp(cmd, "out")) {
             uint32_t i;
             for (i = 0; i < n_out; i++)
-                printf("  out %02X %02X %02X ->%s%s\n", (out_pkt[i] >> 8) & 0xFF, (out_pkt[i] >> 16) & 0xFF,
+                if (((out_pkt[i] >> 8) & 0xFF) != 0xF8)
+                    printf("  out %02X %02X %02X ->%s%s\n", (out_pkt[i] >> 8) & 0xFF, (out_pkt[i] >> 16) & 0xFF,
                        out_pkt[i] >> 24, out_to[i] & TO_USB ? " USB" : "", out_to[i] & TO_BLE ? " BLE" : "");
             n_out = 0;
         } else if (!strcmp(cmd, "expect"))

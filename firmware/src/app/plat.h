@@ -20,15 +20,21 @@ uint32_t plat_ms(void);
 uint32_t plat_buttons(void);           /* held: bit B_* */
 uint32_t plat_keys(void);              /* held: bit k = key k (0 = F3) */
 int32_t plat_enc(int role);            /* detents since the last call, + = clockwise; EN_* */
-void plat_leds(uint32_t buttons, uint32_t keys);   /* lit: bit B_*, bit key */
+uint32_t plat_master(void);            /* MASTER pot, 0..4096 */
+/* lights: bright buttons / keys, and dim ones (lit on one scan frame in a few; a bright bit wins);
+ * glow 0..2 sets how dim (0: the dim ones stay off) */
+void plat_leds(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t dim_keys, int glow);
+/* a critical section against the 1 kHz tick (engine_tick); main loop only */
+uint32_t plat_lock(void);
+void plat_unlock(uint32_t f);
 
 /* MIDI: 4-byte USB-MIDI event packets (byte 0 = cable / CIN, then status, data 1, data 2). The TRS
- * jack is MIDI IN only (the FM-1 has no MIDI out jack). Main loop only. */
+ * jack is MIDI IN only (the FM-1 has no MIDI out jack). */
 enum { PORT_USB, PORT_BLE, PORT_TRS, NPORTS };
 #define TO_USB (1u << PORT_USB)
 #define TO_BLE (1u << PORT_BLE)
 int plat_midi_in(uint32_t *pkt, int *port);   /* 1 = got one, from port PORT_* */
-void plat_midi_send(uint32_t pkt, uint32_t to);   /* to: TO_USB | TO_BLE */
+void plat_midi_send(uint32_t pkt, uint32_t to);   /* to: TO_USB | TO_BLE; main loop or the 1 kHz tick */
 
 /* Bluetooth (BLE MIDI): off at boot, started by hand; once started it runs until a restart */
 enum { BLE_OFF, BLE_STARTING, BLE_READY, BLE_FAILED };

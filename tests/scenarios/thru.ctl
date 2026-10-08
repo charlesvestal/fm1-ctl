@@ -1,12 +1,13 @@
 # MIDI in: USB -> BLE, BLE -> USB, TRS -> USB and BLE; incoming notes light the keys
 midi USB 90 3C 50
-expect midi_out 0
+expect notes_out 0
 midi TRS 90 3E 50
 expect_out USB 90 3E 50
-midi TRS F8
-expect_out USB F8
 out
-tap SEL
+tap GLO
+tap GLO
+tap GLO
+expect view 6
 spin K1 1
 expect ble 1
 wait 1100
