@@ -314,9 +314,18 @@ static uint32_t ble_t0;
 #define BLE_MASK_AT_START 0
 #endif
 static uint8_t irqs_masked;
+/* ble_quiet: the GM synth holds (gm_skip) from the start until the stack is ready. The radio's trim draws
+ * ~500 ms of high current, and what is read from the flash meanwhile can come back corrupted (notes/06 of
+ * fm1-ble): the trim itself runs from RAM, but the synth reads its code and 200 KB of samples from the
+ * flash in the audio interrupt, ~30% of the time, and crashed there 0.2 s into the start (notes/08). */
+static volatile uint8_t ble_quiet;
 static void ble_irqs_back(const char *why)
 {
     uint32_t f;
+    if (ble_quiet && fm1_uptime_ms() - ble_t0 > 1000u) {
+        ble_quiet = 0;
+        shim_log(ble_state == BLE_READY ? "sound back: BT ready" : "sound back: 15 s, not ready");
+    }
     if (!irqs_masked)
         return;
     irqs_masked = 0;
@@ -350,6 +359,7 @@ static void ble_start(void)
     blog.running = 1;
     ble_t0 = blog.t0_up = fm1_uptime_ms();
     shim_log("BT: starting");
+    ble_quiet = 1;
 #if BLE_MASK_AT_START
     {
         uint32_t f = irq_save();

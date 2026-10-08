@@ -14,6 +14,9 @@ int gm_init(void);                         /* 0 = ready */
 void gm_midi(uint32_t st, uint32_t d1, uint32_t d2);   /* a channel message (2 or 3 bytes) */
 void gm_panic(void);                       /* all notes off, all channels */
 void gm_render(int32_t *out_lr, uint32_t n, uint32_t gain_q12);   /* the audio ISR: n stereo frames */
+/* the audio ISR, instead of gm_render: silence, without the library (none of its code or samples read
+ * from the flash); the MIDI meanwhile is dropped, and the next gm_render starts with every note off */
+void gm_skip(int32_t *out_lr, uint32_t n);
 
 /* (UI) */
 extern volatile uint8_t gm_voices;         /* voices sounding */

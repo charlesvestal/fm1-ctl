@@ -36,3 +36,16 @@ Leads, most likely first:
 To reproduce: install build/ctl.fwsc (8d73987) with Sound on (the default); it crashes at the first boot
 with Bluetooth starting. Workaround meanwhile: reinstall d5624a0 (Sound Off does not help: the synth still
 renders, silently; skipping the render when Sound is off would be a cheap fix to add anyway).
+
+## Fixed (2026-10-08): lead 3, the synth reading the flash during the RF trim
+
+The last four branches (ETM, newest first: 0x6F, 0x0200767E, 0x02007666, 0x02008C7C) are the returns from
+`EAS_MixEnginePost` and `EAS_Render`, the mixing loop's branch in `gm_render`, then a jump to 0x6F: nothing
+popped from the stack in between, so not an overflow (lead 1). JieLi's two radio ISRs save r0-r15, psr,
+rets and reti; the map has no overlap (lead 2). What was left: the flash misreads while the radio trims
+(fm1-ble notes/06). The trim runs from RAM, but the audio interrupt read EAS's code and its 200 KB of
+samples from the flash ~30% of the time, right through it.
+
+Fix: `ble_quiet` (ble.c) from `ble_start` until the stack is ready and at least 1 s has passed (or 15 s):
+the audio interrupt calls `gm_skip` (silence, the library untouched, MIDI dropped, every note off at the
+next render). Sound Off skips the render too. Confirmed on the device: Bluetooth starts, the GM sounds play.

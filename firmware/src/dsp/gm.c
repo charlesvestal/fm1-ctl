@@ -15,6 +15,7 @@ volatile float gm_level;
 static EAS_DATA_HANDLE eas;
 static EAS_HANDLE stream;
 static int ready;
+static int skipped;                               /* gm_skip ran: every note off at the next render */
 
 /* the queue: 3-byte messages, the main loop writes, the render reads */
 #define QN 256u
@@ -71,6 +72,13 @@ void gm_render(int32_t *out, uint32_t n, uint32_t gain_q12)
             out[i] = 0;
         return;
     }
+    if (skipped) {                                /* a note-off may have been dropped meanwhile */
+        skipped = 0;
+        for (uint32_t ch = 0; ch < GM_NCH; ch++) {
+            EAS_U8 off[3] = {(EAS_U8)(0xB0u | ch), 120, 0};   /* all sound off */
+            EAS_WriteMIDIStream(eas, stream, off, 3);
+        }
+    }
     drain();
     while (n >= 2) {
         uint32_t k = n / 2 > EAS_FRAMES ? EAS_FRAMES : n / 2, i;
@@ -94,4 +102,14 @@ void gm_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     }
     gm_level = peak;
     gm_voices = (uint8_t)(eas->pVoiceMgr ? eas->pVoiceMgr->activeVoices : 0);
+}
+
+void gm_skip(int32_t *out, uint32_t n)
+{
+    for (uint32_t i = 0; i < 2 * n; i++)
+        out[i] = 0;
+    q_r = q_w;
+    skipped = 1;
+    gm_level = 0;
+    gm_voices = 0;
 }

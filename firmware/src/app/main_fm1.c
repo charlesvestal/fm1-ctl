@@ -27,7 +27,10 @@ static volatile uint32_t audio_gain_q12;            /* MASTER, as volume */
 static void render_block(int32_t *o)                /* ALNK0: one half, measured */
 {
     uint32_t t0 = fm1_ticks(), us, budget = HALF_FRAMES * 1000000u / FS;
-    gm_render(o, HALF_FRAMES, proj.sound == SOUND_OFF ? 0u : audio_gain_q12);
+    if (proj.sound == SOUND_OFF || ble_quiet)
+        gm_skip(o, HALF_FRAMES);                    /* off, or the radio calibrating (ble.c) */
+    else
+        gm_render(o, HALF_FRAMES, audio_gain_q12);
     us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
     audio_cpu_q8 = (audio_cpu_q8 * 15u + (us * 256u) / budget) / 16u;
     audio_cpu_pct = (audio_cpu_q8 * 100u) >> 8;
