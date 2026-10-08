@@ -1,9 +1,10 @@
 # Ctl: a MIDI controller for the M-VAVE FM-1
 
-PRIVATE. Never push this repository anywhere public, and do not distribute its firmware: it links
-JieLi's Bluetooth libraries (Apache-2.0, binary only) into a GPL-3.0 (Felucca-derived) firmware,
-which cannot then offer its complete corresponding source. Distribution waits on a GPL section 7
-additional permission from Felucca's copyright holders (asked), or another route (see LICENSING.md).
+**Share the source, not the firmware.** Ctl links JieLi's Bluetooth libraries (Apache-2.0, binary only)
+into a GPL-3.0 (Felucca-derived) firmware, which then cannot come with its complete corresponding
+source. So no built Ctl may be distributed, by anyone, until that is settled (a GPL section 7
+permission from Felucca's copyright holders has been asked for). The source here may be shared under
+its licences, and anyone may build it for themselves. See [LICENSING.md](LICENSING.md).
 
 Ctl turns the FM-1 into a MIDI controller: the keys play notes (in a scale, if you like), the knobs
 send controllers in four banks, an arpeggiator and a four-track step sequencer run on its clock, and

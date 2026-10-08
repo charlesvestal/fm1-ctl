@@ -1,3 +1,9 @@
+/* SPDX-License-Identifier: GPL-3.0-only AND Apache-2.0
+ * A few interface details repeat the JieLi AC79 SDK, Copyright (c) JIELI (Zhuhai Jieli Technology Co.,
+ * Ltd.), under the Apache License 2.0 (LICENSES/Apache-2.0.txt): the cbuffer_t layout
+ * (include_lib/system/generic/circular_buf.h), the syscfg ids (include_lib/utils/syscfg/syscfg_id.h)
+ * and the board's radio defaults (apps/demo/demo_ble/board/wl82/board.c). The rest is GPL-3.0-only
+ * (LICENSE). */
 /* The rest of what the BT libraries call: libc and a heap, lbuf / cbuf, CRCs, interrupts, the
  * (never sleeping) power hooks, syscfg (in one flash object), logging, and the calibration getters
  * the SDK's sources would give them (apps/common/config/user_cfg.c, net/wifi_conf.c). */

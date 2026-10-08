@@ -1,3 +1,9 @@
+/* SPDX-License-Identifier: GPL-3.0-only AND Apache-2.0
+ * Portions (the connection handling, advertising set-up and connection-parameter requests) come from the
+ * JieLi AC79 SDK's apps/common/ble/le_trans_data.c, Copyright (c) 2011-2016 JIELI (Zhuhai Jieli Technology
+ * Co., Ltd.), under the Apache License 2.0 (LICENSES/Apache-2.0.txt). Changed for Ctl / fm1-ble: the SDK's
+ * test profile replaced by the BLE MIDI service, its packet parsing and batching, and the advertising data.
+ * The rest is GPL-3.0-only (LICENSE). */
 /* BLE MIDI peripheral on JieLi's BLE stack: the MIDI service (03B80E5A-EDE8-4B33-A751-6CE34EC4C700) with
  * its one characteristic (7772E5DB-3868-4112-A1A9-F2669D106BF3: read, write without response, notify),
  * advertised with the service UUID and the name "FM-1". Built on the structure of the SDK's

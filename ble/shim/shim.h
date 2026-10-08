@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: GPL-3.0-only AND Apache-2.0
+ * The OS_* error codes and the Q_* message types repeat the JieLi AC79 SDK's include_lib/system/os/
+ * os_error.h and os_api.h, Copyright (c) JIELI (Zhuhai Jieli Technology Co., Ltd.), under the Apache
+ * License 2.0 (LICENSES/Apache-2.0.txt), so the SDK's binary libraries link against this shim. The rest
+ * is GPL-3.0-only (LICENSE). */
 /* The BT shim: what JieLi's BT libraries expect of their system, on a Felucca-style bare-metal
  * firmware. The firmware provides the shim_* platform hooks below. */
 #pragma once
