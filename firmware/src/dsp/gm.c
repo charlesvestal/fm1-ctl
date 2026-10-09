@@ -53,11 +53,30 @@ static void drain(void)
     }
 }
 
+/* Gain staging. EAS mixes its voices in 32 bits, then hard-clips to 16 at its master volume, before our
+ * gain: at its default 0 dB, six loud notes reached the rail (ten: hundreds of samples a chord). So EAS runs
+ * 6 dB down (ten notes at velocity 127 peak near -3 dBFS there), and the 24-bit stage here makes the 6 dB up,
+ * through a soft knee above -2.5 dBFS instead of a hard edge. */
+#define GM_EAS_VOLUME 94                          /* EAS volume: 100 = 0 dB, 1 dB a step */
+#define FS24 8388607                              /* 24-bit full scale */
+#define KNEE 6291456                              /* 0.75 of it */
+static inline int32_t soft24(int32_t x)
+{
+    int32_t a = x < 0 ? -x : x;
+    float d, y;
+    if (a <= KNEE)
+        return x;
+    d = (float)(a - KNEE) * (1.f / (float)(FS24 - KNEE));
+    y = (float)KNEE + (float)(FS24 - KNEE) * d / (1.f + d);   /* slope 1 at the knee, never past full scale */
+    return x < 0 ? -(int32_t)y : (int32_t)y;
+}
+
 int gm_init(void)
 {
     if (EAS_Init(&eas) != EAS_SUCCESS || EAS_OpenMIDIStream(eas, &stream, NULL) != EAS_SUCCESS)
         return -1;
     EAS_SetSynthPolyphony(eas, 0, poly);          /* not the library's 64: ~2.5% CPU a voice */
+    EAS_SetVolume(eas, NULL, GM_EAS_VOLUME);
     ready = 1;
     return 0;
 }
@@ -65,6 +84,16 @@ int gm_init(void)
 /* 2x up: each EAS sample and the halfway point to the next (linear), one sample late */
 static EAS_PCM pcm[EAS_FRAMES * 2];
 static int32_t prev_l, prev_r;
+/* DC blocker (one pole at ~3.5 Hz): EAS's reverb feedback rounds towards a DC offset (to -55 dB), which
+ * would step to 0 when its tail stops; and a voice ending with an offset clicks */
+static float dc_xl, dc_xr, dc_yl, dc_yr;
+static inline int32_t dc_block(int32_t x, float *px, float *py)
+{
+    float y = (float)x - *px + 0.999f * *py;
+    *px = (float)x;
+    *py = y;
+    return (int32_t)y;
+}
 void gm_render(int32_t *out, uint32_t n, uint32_t gain_q12)
 {
     const int32_t g = (int32_t)gain_q12;          /* Q12 */
@@ -87,15 +116,16 @@ void gm_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         EAS_I32 got = 0;
         EAS_Render(eas, pcm, (EAS_I32)k, &got);
         for (i = 0; i < k; i++) {
-            int32_t l = (i < (uint32_t)got) ? pcm[2 * i] : 0, r = (i < (uint32_t)got) ? pcm[2 * i + 1] : 0;
+            int32_t l = dc_block((i < (uint32_t)got) ? pcm[2 * i] : 0, &dc_xl, &dc_yl),
+                    r = dc_block((i < (uint32_t)got) ? pcm[2 * i + 1] : 0, &dc_xr, &dc_yr);
             int32_t ml = (l + prev_l) >> 1, mr = (r + prev_r) >> 1;
             int32_t a = l < 0 ? -l : l;
-            if ((float)a * (1.f / 32768.f) > peak)
-                peak = (float)a * (1.f / 32768.f);
-            out[0] = (ml * g) >> 4;               /* 16-bit, gain Q12, to 24-bit: << 8 >> 12 */
-            out[1] = (mr * g) >> 4;
-            out[2] = (l * g) >> 4;
-            out[3] = (r * g) >> 4;
+            if ((float)a * (1.f / 16384.f) > peak)    /* after the 6 dB made up, MASTER full */
+                peak = (float)a * (1.f / 16384.f);
+            out[0] = soft24((ml * g) >> 3);       /* 16-bit, gain Q12, to 24-bit (<< 8 >> 12), +6 dB */
+            out[1] = soft24((mr * g) >> 3);
+            out[2] = soft24((l * g) >> 3);
+            out[3] = soft24((r * g) >> 3);
             out += 4;
             prev_l = l;
             prev_r = r;

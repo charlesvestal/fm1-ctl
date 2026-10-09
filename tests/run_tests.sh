@@ -22,6 +22,7 @@ run() {
 }
 run encoder sh -c "$CC -O2 -w -Ifirmware/hal -o $OUT/encoder_test tests/host/encoder_test.c && $OUT/encoder_test"
 run trs sh -c "$CC -O2 -w -Ifirmware/src -Ifirmware/hal -o $OUT/trs_test tests/host/trs_test.c && $OUT/trs_test"
+run gm sh -c "$CC -O2 -std=gnu99 -w -DCT_HOST -Ifirmware/src -Ifirmware/src/dsp -Ifirmware/src/dsp/eas -o $OUT/gm_test tests/host/gm_test.c \$(ls firmware/src/dsp/eas/*.c | grep -v 'wt_22khz\\|wt_200k_samples') -lm && $OUT/gm_test"
 run storage sh -c "$CC -O2 -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 # the update path, against the firmware package (Felucca's tests; needs ./build.sh)
 if [ -f build/ctl.fwsc ]; then
