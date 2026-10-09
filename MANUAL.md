@@ -33,7 +33,7 @@ plays through its speaker and headphone jack with nothing connected.
 | PRESETS | Program change, 1 to 128: picks the onboard sound too |
 | FX | Next knob bank, A to D. Hold it and turn KNOB 1–4 to set their controller numbers |
 | ARP | Arp page |
-| ENV | Sustain while held |
+| ENV | Sustain while held; tap twice to lock it on, press again to unlock |
 | PLAY | Start or stop the sequencer, and send MIDI start or stop |
 | REC | Panic: all notes off |
 | SAVE | Save the settings now |
@@ -63,7 +63,7 @@ from outside. Small tags show the knob bank and "BLE" once Bluetooth is running.
 page name means there are unsaved changes.
 
 Above the knobs, a status line on every page shows the lowest key's note, "ARP" or "LATCH" while the
-arpeggiator is on, "SUSTAIN" while ENV is held, "MOD" while the mod wheel is up, and on the right the program (by name while the onboard
+arpeggiator is on, "SUSTAIN" while ENV is held ("SUS LOCK" when locked), "MOD" while the mod wheel is up, and on the right the program (by name while the onboard
 sound is on).
 
 The bottom band shows what KNOB 1–4 do on the current page, with their values. The knob you turned
@@ -79,7 +79,9 @@ the octave before letting go.
 
 - **Velocity** is fixed, because the keys don't sense how hard they are pressed. Set it on the
   Keys page (KNOB 3); it starts at 100.
-- **Sustain:** hold ENV. It sends controller 64 on, and off when you let go.
+- **Sustain:** hold ENV. It sends controller 64 on, and off when you let go. Tap ENV twice quickly to lock
+  sustain on ("SUS LOCK" on the status line); press ENV again to unlock, and sustain ends when you let go.
+  REC (panic) unlocks it too.
 - **Mod wheel:** hold LFO. The mod wheel (controller 1) rises from 0 to 127 over a sixteenth note, and when
   you let go it falls back to 0 just as fast. On the onboard sounds it adds vibrato; on a synth it does
   whatever the mod wheel is set to do there. "MOD" shows in the status line while it is up.
@@ -278,7 +280,7 @@ Saving pauses the FM-1 for a moment, which is why it waits until you stop playin
 
 ## The lights
 
-- **Bright:** the current page's button, LFO while the mod wheel is up, ENV while sustain is held,
+- **Bright:** the current page's button, LFO while the mod wheel is up, ENV while sustain is on,
   and OCT− or OCT+ while the octave is shifted.
 - **PLAY** is green: it flashes bright green on each beat while playing, and glows dim green otherwise.
 - **Keys:** light while you hold them, and when a note arrives from MIDI in.

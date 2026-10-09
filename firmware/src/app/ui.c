@@ -8,7 +8,7 @@
  *   FX            the next knob bank (A..D); held on Play, KNOB 1-4 set the bank's controller numbers
  *   ARP           the Arp page (KNOB 1 there turns it on: Off / On / Latch)
  *   PLAY          start / stop (the sequencer, MIDI start / stop)    REC  panic (all notes off)
- *   ENV           sustain while held            OCT- / OCT+  the octave (-3..+3)
+ *   ENV           sustain while held; a double tap locks it on (a press unlocks)    OCT- / OCT+  the octave (-3..+3)
  *   LFO           the mod wheel (CC 1): up over a sixteenth while held, back down after
  *   pages         one button each: HOME Play, SEL Keys, ARP Arp, SEQ Sequencer, GLO Sound, EDIT Setup
  *   SAVE          saves (it also saves by itself, a few seconds after a change)
@@ -68,6 +68,8 @@ static struct {
     uint32_t heard[4];                 /* notes held from MIDI in (any port), for the key lights */
     uint8_t playing;
     uint8_t sustain;
+    uint8_t sus_lock;                  /* ENV tapped twice: sustain stays on after the release */
+    uint32_t env_t;                    /* when ENV last went down */
     uint8_t fx_used;                   /* a knob turned while FX was held: no bank change at its release */
     uint32_t fx_t;                     /* when FX went down */
     uint8_t dirty;
@@ -254,7 +256,7 @@ static void panic(void)
     play(0xB0u, 123, 0);                 /* all notes off */
     if (proj.seq_ch != proj.chan)
         send(pkt3(0xB0u | proj.seq_ch, 123, 0), TO_USB | TO_BLE);
-    ui.sustain = 0;
+    ui.sustain = ui.sus_lock = 0;
     put_s(ui.last, "All notes off");
 }
 
@@ -523,13 +525,24 @@ static void octave(int d)
     mark_dirty();
 }
 
+#define ENV_TAP_MS 300u                  /* ENV: two presses this close lock sustain */
 static void button_down(int b)
 {
     switch (b) {
-    case B_ENV:
+    case B_ENV: {                        /* a second press within ENV_TAP_MS locks; a press when locked unlocks */
+        uint32_t now = plat_ms();
+        if (ui.sus_lock) {
+            ui.sus_lock = 0;             /* held now as usual: off at the release */
+        } else if (now - ui.env_t < ENV_TAP_MS) {
+            ui.sus_lock = 1;
+            say("SUSTAIN", "LOCKED");
+        }
+        ui.env_t = ui.sus_lock ? 0u : now;   /* not a third tap */
+        if (!ui.sustain)
+            cc(64, 127);
         ui.sustain = 1;
-        cc(64, 127);
         break;
+    }
     case B_LFO: engine_mod(1); break;
     case B_PLAY:
         ui.playing = (uint8_t)!ui.playing;
@@ -552,6 +565,8 @@ static void button_up(int b)
 {
     switch (b) {
     case B_ENV:
+        if (ui.sus_lock)
+            break;
         ui.sustain = 0;
         cc(64, 0);
         break;
@@ -1050,7 +1065,7 @@ static void draw_status(void)
     char t[24];
     int32_t x;
     uint32_t h = hash(hash(hash(2166136261u, (uint32_t)(proj.octave + 3) | proj.scale << 4 | proj.root << 8 |
-                                                 ui.sustain << 12 | proj.arp_on << 13 | proj.arp_latch << 14 |
+                                                 ui.sustain << 12 | ui.sus_lock << 16 | proj.arp_on << 13 | proj.arp_latch << 14 |
                                                  (uint32_t)(eng_mod_val() != 0) << 15),
                            proj.program | proj.sound << 8 | (uint32_t)proj.chan << 12), ui.view);
     if (h == ui.sig[3])
@@ -1063,7 +1078,7 @@ static void draw_status(void)
     if (proj.arp_on)
         x += tag(x, 2, proj.arp_latch ? "LATCH" : "ARP", K_HOT_T, K_HOT) + 4;
     if (ui.sustain)
-        x += tag(x, 2, "SUSTAIN", K_HOT_T, K_HOT) + 4;
+        x += tag(x, 2, ui.sus_lock ? "SUS LOCK" : "SUSTAIN", K_HOT_T, K_HOT) + 4;
     if (eng_mod_val())
         tag(x, 2, "MOD", K_HOT_T, K_HOT);
     prog_name(t, proj.program);

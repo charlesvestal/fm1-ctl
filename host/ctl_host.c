@@ -353,6 +353,8 @@ static int expect(const char *what, const char *val)
         got = ui.dirty;
     else if (!strcmp(what, "sustain"))
         got = ui.sustain;
+    else if (!strcmp(what, "sus_lock"))
+        got = ui.sus_lock;
     else if (!strcmp(what, "playing"))
         got = ui.playing;
     else if (!strcmp(what, "store_writes"))
