@@ -140,6 +140,8 @@ static char *prog_name(char *b, uint32_t p)
 
 /* ------------------------------------------------------------- MIDI --- */
 static uint32_t pkt3(uint32_t st, uint32_t d1, uint32_t d2) { return (st >> 4) | st << 8 | d1 << 16 | d2 << 24; }
+/* the onboard synth on the program shown (only there: the program goes out over MIDI when PRESETS turns) */
+static void synth_program(void) { plat_midi_send(pkt3(0xC0u | proj.chan, proj.program, 0), TO_SYNTH); }
 
 static void send(uint32_t pkt, uint32_t to)
 {
@@ -674,6 +676,7 @@ static void input(void)
             all_keys_up();               /* held notes end on the channel they started on */
             engine_panic();
             proj.chan = (uint8_t)c;
+            synth_program();
             mark_dirty();
         }
     }
@@ -1202,6 +1205,7 @@ void ui_init(void)
     ui.master_sent = -1;
     ui.master_raw = (int32_t)plat_master();
     lcd_fill(0, 0, 240, 240, K_BG);
+    synth_program();                     /* the saved program, which the screen shows */
 }
 
 void ui_frame(void)

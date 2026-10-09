@@ -273,16 +273,25 @@ uint32_t plat_cpu_pct(void) { return 0; }
 static void host_synth(uint32_t pkt, uint32_t to)
 {
     uint32_t st = (pkt >> 8) & 0xFFu;
-    if (((to & TO_SYNTH) || ((to & (TO_USB | TO_BLE)) && !(to & TO_NOSYNTH))) && proj.sound != SOUND_OFF &&
-        st >= 0x80u && st < 0xF0u)
+    if (((to & TO_SYNTH) || ((to & (TO_USB | TO_BLE)) && !(to & TO_NOSYNTH))) &&
+        (proj.sound != SOUND_OFF || st >= 0xB0u) && st >= 0x80u && st < 0xF0u)
         gm_midi(st, (pkt >> 16) & 0x7Fu, (pkt >> 24) & 0x7Fu);
 }
 
 static void boot(void)
 {
     static int synth;
-    if (!synth)
+    if (!synth) {
         synth = gm_init() == 0;
+    } else {                               /* a restart: the synth as at power-on (program 0 everywhere) */
+        int32_t silence[512];
+        for (uint32_t ch = 0; ch < 16; ch++) {
+            gm_midi(0xC0u | ch, 0, 0);
+            gm_midi(0xB0u | ch, 121, 0);
+        }
+        gm_panic();
+        gm_render(silence, 256, 0);
+    }
     project_load();
     lcd_fill(0, 0, 240, 240, 0);
     ble_state = BLE_OFF;                   /* Bluetooth starts at every boot, as on the device */
@@ -339,6 +348,8 @@ static int expect(const char *what, const char *val)
     int got;
     if (!strcmp(what, "voices"))           /* the onboard synth's voices sounding */
         got = gm_voices;
+    else if (!strcmp(what, "sound"))
+        got = proj.sound;
     else if (!strcmp(what, "view"))
         got = ui.view;
     else if (!strcmp(what, "chan"))
@@ -349,6 +360,8 @@ static int expect(const char *what, const char *val)
         got = proj.octave;
     else if (!strcmp(what, "program"))
         got = proj.program;
+    else if (!strcmp(what, "synth_program"))   /* what the onboard synth plays on the channel */
+        got = gm_program[proj.chan];
     else if (!strcmp(what, "dirty"))
         got = ui.dirty;
     else if (!strcmp(what, "sustain"))

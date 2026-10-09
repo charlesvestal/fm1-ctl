@@ -39,8 +39,21 @@ void gm_panic(void)
     }
 }
 
+/* what gm_skip set aside: programs, controllers and bends, in order (a full one keeps the first) */
+#define HELD_N 64u
+static uint32_t held[HELD_N];
+static uint32_t held_n;
+
 static void drain(void)
 {
+    for (uint32_t i = 0; i < held_n; i++) {
+        uint32_t m = held[i];
+        EAS_U8 b[3] = {(EAS_U8)m, (EAS_U8)(m >> 8), (EAS_U8)(m >> 16)};
+        if ((m & 0xF0u) == 0xC0u)
+            gm_program[b[0] & 15u] = b[1];
+        EAS_WriteMIDIStream(eas, stream, b, (m & 0xF0u) == 0xC0u ? 2 : 3);
+    }
+    held_n = 0;
     while (q_r != q_w) {
         uint32_t m = q[q_r % QN];
         EAS_U8 b[3] = {(EAS_U8)m, (EAS_U8)(m >> 8), (EAS_U8)(m >> 16)};
@@ -137,7 +150,13 @@ void gm_skip(int32_t *out, uint32_t n)
 {
     for (uint32_t i = 0; i < 2 * n; i++)
         out[i] = 0;
-    q_r = q_w;
+    while (q_r != q_w) {                          /* the notes dropped; programs and controllers kept for */
+        uint32_t m = q[q_r % QN], st = m & 0xF0u;     /* the next render (EAS untouched here) */
+        BARRIER();
+        q_r++;
+        if ((st == 0xB0u || st == 0xC0u || st == 0xE0u) && held_n < HELD_N)
+            held[held_n++] = m;
+    }
     skipped = 1;
     gm_level = 0;
     gm_voices = 0;

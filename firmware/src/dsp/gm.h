@@ -17,7 +17,8 @@ void gm_midi(uint32_t st, uint32_t d1, uint32_t d2);   /* a channel message (2 o
 void gm_panic(void);                       /* all notes off, all channels */
 void gm_render(int32_t *out_lr, uint32_t n, uint32_t gain_q12);   /* the audio ISR: n stereo frames */
 /* the audio ISR, instead of gm_render: silence, without the library (none of its code or samples read
- * from the flash); the MIDI meanwhile is dropped, and the next gm_render starts with every note off */
+ * from the flash); the notes meanwhile are dropped (programs, controllers and bends kept for the next
+ * gm_render), and the next gm_render starts with every note off */
 void gm_skip(int32_t *out_lr, uint32_t n);
 /* the audio ISR, after a render that nearly used up its time: 4 voices fewer (down to GM_VOICES_MIN), so
  * the interrupt can never take all of the CPU (the main loop starved, the watchdog's reset) */

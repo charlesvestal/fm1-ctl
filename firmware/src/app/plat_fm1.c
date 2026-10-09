@@ -124,9 +124,10 @@ void plat_midi_send(uint32_t pkt, uint32_t to)   /* the main loop's and the tick
         midi_out_event(pkt);
     if (to & TO_BLE)
         ble_midi_tap(pkt);
-    if (((to & TO_SYNTH) || ((to & (TO_USB | TO_BLE)) && !(to & TO_NOSYNTH))) && proj.sound != SOUND_OFF) {
+    if ((to & TO_SYNTH) || ((to & (TO_USB | TO_BLE)) && !(to & TO_NOSYNTH))) {
         uint32_t st = (pkt >> 8) & 0xFFu;      /* channel messages only: the synth's queue is single-writer, */
-        if (st >= 0x80u && st < 0xF0u)         /* and this runs under the lock or in the tick */
+        if (st >= 0x80u && st < 0xF0u &&      /* and this runs under the lock or in the tick; with Sound off */
+            (proj.sound != SOUND_OFF || st >= 0xB0u))   /* no notes, but programs and controllers still set */
             gm_midi(st, (pkt >> 16) & 0x7Fu, (pkt >> 24) & 0x7Fu);
     }
     if (!in_tick)
