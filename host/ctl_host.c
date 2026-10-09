@@ -130,7 +130,7 @@ int plat_ble_state(void) { return ble_state; }
 int plat_ble_connected(void) { return ble_conn; }
 void plat_ble_start(void)
 {
-    if (ble_state != BLE_OFF)
+    if (ble_state != BLE_OFF || !CT_BLE)  /* the USB-only build: no Bluetooth */
         return;
     ble_state = BLE_STARTING;
     ble_t0 = now_ms;

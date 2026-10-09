@@ -53,6 +53,10 @@ SDK_SHA256 = {
 
 PRODUCT = "FM-1_600"                # package identity (dev build); release builds are FM-1_6XXYYZZ (see main)
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/ui.c)
+BLE = True                          # --no-ble: the USB-only build, without JieLi's BT libraries (distributable)
+# symbols from JieLi's BT libraries or the shim: none may be in the USB-only image
+BT_SYMS = ("btstack_init", "bt_ble_init", "bt_max_pwr_set", "le_controller_set_mac", "lmp_set_sniff_disable",
+           "shim_os_init", "ble_midi_send_many")
 
 
 def toolchain():
@@ -257,6 +261,8 @@ def build_app():
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
+    if not BLE:
+        flags.append("-DCT_BLE=0")
     if VERSION:
         flags.append(f'-DCT_VERSION="{VERSION}"')
     o2 = [f if f != "-Os" else "-O2" for f in flags]
@@ -270,7 +276,7 @@ def build_app():
         o = OUT / "o2" / (u.replace("/", "_")[:-2] + ".o")
         units.append(("cc", *o2, "-c", FW / "src" / u, "-o", o))
         objs.append(o)
-    b_units, b_objs, b_libs = ble_units()
+    b_units, b_objs, b_libs = ble_units() if BLE else ([], [], [])
     units += b_units
     tc_all(*units)
     elf = OUT / "ctl.elf"
@@ -329,6 +335,12 @@ def check(img, syms, dis, rt):
             val = (int(v[0]) & 0xFFFFFFFF) if v[0] else int(v[1], 16) & 0xFFFFFFFF
             if 0xFFC00000 <= val < 0xFFD00000:
                 errors.append(f"reference to ROM address {val:#010x}")
+    if not BLE:
+        bt = [n for n in BT_SYMS if re.search(r"\s" + n + r"$", syms, re.M)]
+        if bt:
+            errors.append(f"USB-only build links Bluetooth code: {bt}")
+        else:
+            notes.append("USB-only: no Bluetooth code linked")
     if len(img) > APP_SLOT:
         errors.append(f"image {len(img)} B exceeds the app slot")
     # the FPU is single precision; a soft-double routine in the image means a double crept in
@@ -398,12 +410,16 @@ def mmio_check():
 
 
 def main():
-    global PRODUCT, VERSION
+    global PRODUCT, VERSION, BLE
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", metavar="X.Y[.Z]", help="release build: identity FM-1_6XXYYZZ, version string X.Y[.Z]")
+    ap.add_argument("--no-ble", action="store_true",
+                    help="the USB-only build: no Bluetooth, none of JieLi's BT libraries (ctl-usb*.fwsc)")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
-    name = "ctl.fwsc"
+    BLE = not a.no_ble
+    stem = "ctl" if BLE else "ctl-usb"
+    name = f"{stem}.fwsc"
     if a.release:
         # identity FM-1_6 + major, minor, patch as two digits each (0.1 -> FM-1_6000100): FM-1 is the
         # model the update tools match on; the number is ours (X0X 9, FoMni 8, Eno 7, Ctl 6). Digits only after the
@@ -413,7 +429,7 @@ def main():
             raise SystemExit(f"--release {a.release}: use X.Y[.Z][-suffix], up to two digits each")
         PRODUCT = "FM-1_6%02d%02d%02d" % (int(m[1]), int(m[2]), int(m[3] or 0))
         VERSION = a.release.upper() if "BETA" in a.release.upper() else a.release.upper() + " BETA"
-        name = f"ctl-{a.release}.fwsc"
+        name = f"{stem}-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:

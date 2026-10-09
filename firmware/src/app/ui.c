@@ -17,7 +17,7 @@
  * black keys 1-4 select a track, 5-8 mute one.
  *
  * Out: everything played goes to USB and Bluetooth. Thru: USB in -> Bluetooth, Bluetooth in -> USB,
- * the TRS jack in -> USB and Bluetooth. */
+ * the TRS jack in -> USB and Bluetooth. The USB-only build (CT_BLE 0) shows no Bluetooth. */
 
 enum { V_PLAY, V_SCALE, V_ARP, V_SEQ, V_SOUND, V_SETUP, NVIEWS };
 static const char *const VIEW_NAME[NVIEWS] = {"Play", "Keys", "Arp", "Sequencer", "Sound", "Setup"};
@@ -299,7 +299,7 @@ static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_ARP, K_AMODE, K_ARATE, K_AOCT},
     {K_STEPS, K_HITS, K_ROT, K_NOTE},
     {K_SOUND, K_SNDIN, K_MASTER, K_NONE},
-    {K_CLOCK, K_SEQCH, K_GLOW, K_BT},
+    {K_CLOCK, K_SEQCH, K_GLOW, CT_BLE ? K_BT : K_NONE},
 };
 /* FX held on Play: the knobs set the bank's controller numbers, shown once it has been held a moment
  * (a tap to change banks does not flash them) or a knob turns */
@@ -822,9 +822,12 @@ static void draw_keys(int32_t y0, int32_t h)
 
 static void draw_ports(int32_t y0)
 {
-    int p;
+    int p, slot = 0;
     for (p = 0; p < NPORTS; p++) {
-        int32_t x = 8 + p * 78;
+        int32_t x = 8 + slot * 78;
+        if (!CT_BLE && p == PORT_BLE)
+            continue;                    /* the USB-only build: USB and TRS */
+        slot++;
         int i = lit(ui.in_t, p), o = p < 2 && lit(ui.out_t, p);
         const char *st = "";
         uint16_t sc = K_DIM;
@@ -950,8 +953,14 @@ static void draw_setup(void)                     /* the settings below; Bluetoot
 {
     char t[40];
     int s = plat_ble_state(), i, n;
-    const char *st = plat_ble_connected() ? "connected" : s == BLE_READY ? "advertising" :
-                     s == BLE_STARTING ? "starting" : s == BLE_FAILED ? "failed" : "off";
+    const char *st;
+    if (!CT_BLE) {
+        cv_text(10, 2, &FONT_S, "USB MIDI, TRS MIDI in", K_TEXT);
+        cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_LINE);
+        return;
+    }
+    st = plat_ble_connected() ? "connected" : s == BLE_READY ? "advertising" :
+         s == BLE_STARTING ? "starting" : s == BLE_FAILED ? "failed" : "off";
     put_s(put_s(t, "Bluetooth "), st);
     cv_text(10, 2, &FONT_S, t, plat_ble_connected() ? K_COOL : K_TEXT);
     cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_LINE);

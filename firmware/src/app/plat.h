@@ -43,7 +43,12 @@ void plat_midi_send(uint32_t pkt, uint32_t to);   /* to: TO_USB | TO_BLE (and th
                                                   * or the 1 kHz tick. Ctl's own notes (to USB or BLE) also play the synth */
 uint32_t plat_cpu_pct(void);           /* the GM synth's share of the audio time, % */
 
-/* Bluetooth (BLE MIDI): started at every boot (not after a crash in it: then by hand) */
+/* Bluetooth (BLE MIDI): started at every boot (not after a crash in it: then by hand).
+ * CT_BLE 0 (tools/build.py --no-ble): a USB / TRS-only build without JieLi's BT libraries, which can
+ * be distributed while their licence is not settled; Bluetooth then stays BLE_OFF and its UI is hidden */
+#ifndef CT_BLE
+#define CT_BLE 1
+#endif
 enum { BLE_OFF, BLE_STARTING, BLE_READY, BLE_FAILED };
 int plat_ble_state(void);
 int plat_ble_connected(void);          /* a central is connected and listening */

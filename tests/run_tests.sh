@@ -38,6 +38,7 @@ else
     echo "  skip update-path tests (no build/ctl.fwsc: run ./build.sh)"
 fi
 run host-build sh host/build_host.sh
+run host-build-usb sh -c "CT_BLE=0 sh host/build_host.sh"
 if command -v emcc >/dev/null 2>&1; then
     run emu sh -c "sh web/emu/build.sh >/dev/null && node tests/host/emu_test.mjs build/emu/ctl.wasm"
 else
@@ -47,6 +48,12 @@ for s in tests/scenarios/*.ctl; do
     n=$(basename "$s" .ctl)
     mkdir -p "build/scenarios/$n"
     run "scenario-$n" build/host/ctl_host "$s" "build/scenarios/$n"
+done
+# the USB-only build (--no-ble): no Bluetooth, its controls hidden
+for s in tests/scenarios/usb/*.ctl; do
+    n=usb-$(basename "$s" .ctl)
+    mkdir -p "build/scenarios/$n"
+    run "scenario-$n" build/host/ctl_host_usb "$s" "build/scenarios/$n"
 done
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

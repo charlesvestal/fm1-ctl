@@ -13,6 +13,12 @@ user's own copy of the AC79 SDK. Building it for your own use is fine. The route
 firmware: a GPLv3 section 7 additional permission from Felucca's copyright holders allowing the link
 (asked), an MIT rewrite of the platform layer, or a Bluetooth part running as a separate program.
 
+**The USB-only build can be distributed.** `./build.sh --no-ble` (`ctl-usb*.fwsc`) links none of JieLi's
+Bluetooth libraries, the shim or the SDK sources derived from them (`ble/`, `firmware/src/app/ble.c`);
+the build checks that none of their symbols is in the image. What remains is GPL-3.0-only code plus the
+SDK files every Felucca firmware carries in its package (`uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin`),
+so it may be distributed under the GPL with this source, as FoMni and X0X are.
+
 The browser emulator (`web/emu/`) is built from the host simulator, which leaves the Bluetooth stack
 out; it contains no JieLi code and may be shared as it is.
 

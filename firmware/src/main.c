@@ -2,7 +2,7 @@
 /* Ctl firmware for the M-VAVE FM-1, a MIDI controller (USB, Bluetooth, the TRS jack in): one
  * compilation unit for the platform and the app (Felucca's layout, as X0X: the HAL is header-only,
  * so everything that touches it is here). JieLi's BT stack and the shim are linked beside it
- * (tools/build.py). -Os. Order matters. */
+ * (tools/build.py), except in the USB-only build (--no-ble, CT_BLE 0). -Os. Order matters. */
 #include <stdint.h>
 #include "fm1_time.h"
 #include "fm1_sys.h"
@@ -120,5 +120,9 @@ static void ota_commit(const uint8_t *parm)
 #include "app/project.c"
 #include "app/engine.c"
 #include "app/ui.c"
+#if CT_BLE
 #include "app/ble.c"
+#else
+#include "app/ble_none.c"              /* the USB-only build (--no-ble) */
+#endif
 #include "app/main_fm1.c"

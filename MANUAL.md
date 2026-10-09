@@ -247,6 +247,9 @@ Press EDIT for the Setup page.
 
 The page also shows Bluetooth's state and log, and the firmware version.
 
+The USB-only version of Ctl (`ctl-usb`) has no Bluetooth: KNOB 4 is empty here, the page shows only the
+firmware version, and the Play page shows only the USB and TRS ports.
+
 ## Bluetooth
 
 Bluetooth starts by itself every time the FM-1 starts, as on the stock firmware. It advertises as

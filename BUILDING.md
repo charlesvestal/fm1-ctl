@@ -46,6 +46,13 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 
 `./build.sh --release 0.1` makes a release build; the package is `build/ctl-0.1.fwsc`, identity FM-1_6000100.
 
+`./build.sh --no-ble` makes the USB-only build (`build/ctl-usb.fwsc`, `ctl-usb-0.1.fwsc` with
+`--release 0.1`): `CT_BLE=0`, `firmware/src/app/ble_none.c` in place of `ble.c`, none of JieLi's BT
+libraries or the shim linked (the build fails if any of their symbols is in the image), and the
+Bluetooth knob, port and log hidden. It keeps the same identity, so a Bluetooth build installs over it as
+an update. `CT_BLE=0 sh host/build_host.sh` and `CT_BLE=0 web/emu/build.sh` build the simulator and the
+emulator to match; `tests/scenarios/usb/` runs against it.
+
 On macOS with podman instead of Docker, put a `docker` script that runs `exec podman "$@"` first
 on your PATH. `CT_JOBS` (default 4) limits parallel compiles: a podman machine drops
 connections when many containers start at once.
@@ -88,4 +95,5 @@ mode. If the FM-1 no longer starts but reaches the chip's update mode (4C4A:8057
 
 ## Publishing
 
-Not while the licence is open: no site, no releases (README.md, LICENSING.md).
+With Bluetooth, not while the licence is open (README.md, LICENSING.md). The USB-only build
+(`./build.sh --no-ble --release X.Y`) can be released: `gh release create vX.Y build/ctl-usb-X.Y.fwsc`.

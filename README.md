@@ -5,6 +5,8 @@ into a GPL-3.0 (Felucca-derived) firmware, which then cannot come with its compl
 source. So no built Ctl may be distributed, by anyone, until that is settled (a GPL section 7
 permission from Felucca's copyright holders has been asked for). The source here may be shared under
 its licences, and anyone may build it for themselves. See [LICENSING.md](LICENSING.md).
+The USB-only build (`./build.sh --no-ble`) leaves the Bluetooth libraries out and can be distributed
+under the GPL like any Felucca firmware.
 
 Ctl turns the FM-1 into a MIDI controller: the keys play notes (in a scale, if you like), the knobs
 send controllers in four banks, an arpeggiator and a four-track step sequencer run on its clock, and
@@ -24,6 +26,7 @@ mode (USB on, nothing else), from where the web installer works.
 
 ```
 ./build.sh                                     # build/ctl.fwsc (needs the AC79 SDK: the BT libraries)
+./build.sh --no-ble                            # build/ctl-usb.fwsc: USB and TRS only, no Bluetooth
 sh tests/run_tests.sh                          # host tests, the app in the simulator, the web build
 python3 tools/fm1_install.py build/ctl.fwsc    # install it over USB
 ```
