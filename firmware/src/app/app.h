@@ -43,11 +43,13 @@ typedef struct {
     uint8_t clock;                       /* CLK_* */
     uint8_t arp_on, arp_mode, arp_rate, arp_oct, arp_latch;
     uint8_t seq_ch;                      /* the sequencer's channel 0..15 (drums: 10) */
-    uint8_t master_cc;                   /* the MASTER pot: 0 = off, else its controller number */
+    uint8_t master_cc;                   /* the MASTER pot: 0 = the synth's volume, else its controller number */
     uint8_t glow;                        /* unlit buttons: 0 off, 1 low, 2 high */
     track_t trk[NTRACKS];
-    uint8_t sound;                       /* SOUND_* (0, the default, in an older project too: on, MIDI in too) */
-    uint8_t rsv[15];                     /* room to grow */
+    uint8_t sound;                       /* SOUND_IN on (0, the default) or SOUND_OFF; SOUND_KEYS from older
+                                          * projects is read as on with in_mute */
+    uint8_t in_mute;                     /* 1: MIDI in does not play the synth */
+    uint8_t rsv[14];                     /* room to grow */
 } project_t;
 
 extern project_t proj;
@@ -67,6 +69,7 @@ void arp_press(int note);
 void arp_release(int note);
 void arp_set(int on);                    /* on / off; off ends the note */
 void arp_latch_changed(void);
+void engine_mod(int up);                 /* LFO: the mod wheel up (held) or down, over a sixteenth */
 void engine_panic(void);                 /* every note the engine has on, off */
 
 void ui_init(void);

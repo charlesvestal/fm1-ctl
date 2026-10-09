@@ -61,7 +61,8 @@ static int project_valid(void)
         proj.program > 127u || proj.bank >= NBANKS || proj.root > 11u || proj.scale >= NSCALES ||
         proj.human > 40u || proj.tempo < 40u || proj.tempo > 240u || proj.clock >= NCLK || proj.arp_on > 1u ||
         proj.arp_mode >= NARP || proj.arp_rate >= NRATE || proj.arp_oct < 1u || proj.arp_oct > 3u ||
-        proj.arp_latch > 1u || proj.seq_ch > 15u || proj.master_cc > 119u || proj.glow > 2u)
+        proj.arp_latch > 1u || proj.seq_ch > 15u || proj.master_cc > 119u || proj.glow > 2u ||
+        proj.sound >= NSOUND || proj.in_mute > 1u)
         return 0;
     for (b = 0; b < NBANKS; b++)
         for (k = 0; k < NKNOBS; k++)
@@ -81,8 +82,13 @@ int project_load(void)
     int n;
     memset(&proj, 0, sizeof proj);
     n = plat_store_load(OBJ_PROJ, &proj, sizeof proj);
-    if (n >= 8 && project_valid())
+    if (n >= 8 && project_valid()) {
+        if (proj.sound == SOUND_KEYS) {          /* an older project's "Keys": on, MIDI in not played */
+            proj.sound = SOUND_IN;
+            proj.in_mute = 1;
+        }
         return 0;
+    }
     project_defaults();
     return -1;
 }

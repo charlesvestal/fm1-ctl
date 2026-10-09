@@ -32,6 +32,8 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
     else
         gm_render(o, HALF_FRAMES, audio_gain_q12);
     us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
+    if (us > budget * 9u / 10u)
+        gm_overload();
     audio_cpu_q8 = (audio_cpu_q8 * 15u + (us * 256u) / budget) / 16u;
     audio_cpu_pct = (audio_cpu_q8 * 100u) >> 8;
 }
@@ -309,7 +311,8 @@ static void fm1_main(void)
             if (a >= 0) {
                 knob = knob < 0 ? a * 16 : knob + (a * 16 - knob) / 8;
                 master_q12 = (uint32_t)(knob / 4);
-                audio_gain_q12 = (master_q12 * master_q12) >> 12;   /* volume: a squared curve */
+                audio_gain_q12 = proj.master_cc ? 4096u :          /* MASTER sends a controller: full */
+                                 (master_q12 * master_q12) >> 12;   /* volume: a squared curve */
             }
         }
         if (fm1_ms - last_frame >= 16u) {           /* ~60 frames/s at most; input in between */

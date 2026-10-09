@@ -8,7 +8,9 @@
  *   clock     24 ticks a quarter note. Internal: from proj.tempo, sent out (CLK_INT_OUT: over USB always,
  *             over Bluetooth only while playing) or not.
  *             External: one tick per MIDI clock received (engine_midi_clock, from the main loop).
- *   arp       runs whenever it is on and has notes, playing or not; rate 1/4 .. 1/32, gate half a step
+ *   arp       runs whenever it is on and has notes, playing or not; rate 1/4 .. 1/32, gate half a step;
+ *             its steps on the sequencer's grid while playing (counted from PLAY), else on the clock's
+ *   mod       LFO held: the mod wheel (CC 1) rises to 127 over a sixteenth; let go, it falls back as fast
  *   sequencer runs while playing (PLAY, or MIDI start when external): sixteenths, each track its own
  *             length (polymetric), gate an eighth of a beat */
 
@@ -26,10 +28,12 @@ static struct {
     /* the arpeggiator's notes: in the order played; held = the keys down now */
     uint8_t pool[16], npool;
     uint32_t held[4];
-    uint32_t arp_tick;
     int arp_pos;
     uint8_t arp_note, arp_left;          /* the note on (0xFF none), ticks to its off */
     uint32_t rnd;
+    volatile uint8_t mod_up;             /* LFO held */
+    uint8_t mod_sent, mod_wait;          /* the last value sent; ms until another may go */
+    uint32_t mod_q;                      /* the mod wheel now, 0..127 << 16 */
 } eng = {.arp_note = 0xFF, .seq_note = {0xFF, 0xFF, 0xFF, 0xFF}, .rnd = 2463534242u};
 
 static uint32_t eng_rand(void)
@@ -202,14 +206,11 @@ static void clock_tick(void)                     /* one 24th of a beat */
             eng_send(0x80u | proj.seq_ch, eng.seq_note[t], 0);
             eng.seq_note[t] = 0xFF;
         }
-    if (proj.arp_on && eng.npool) {
-        if (eng.arp_tick % RATE_TICKS[proj.arp_rate] == 0u)
+    if (proj.arp_on && eng.npool) {              /* on the sequencer's grid (from PLAY), or the clock's */
+        if ((eng.running ? eng.seq_tick : eng.ticks - 1u) % RATE_TICKS[proj.arp_rate] == 0u)
             arp_step();
-        eng.arp_tick++;
-    } else {
-        eng.arp_tick = 0;
-        if (!eng.npool)
-            arp_off();
+    } else if (!eng.npool) {
+        arp_off();
     }
     if (eng.running) {
         if (eng.seq_tick % SEQ_TICKS == 0u)
@@ -218,8 +219,31 @@ static void clock_tick(void)                     /* one 24th of a beat */
     }
 }
 
+/* the mod wheel's ramp: a sixteenth from 0 to 127 or back (at the SELECT tempo, the clock's when external);
+ * sent when it changes, at most one value every MOD_GAP ms (Bluetooth's link is narrow), the ends always */
+#define MOD_GAP 5u
+static void mod_tick(void)
+{
+    uint32_t target = eng.mod_up ? 127u << 16 : 0u, step = (127u << 16) * proj.tempo / 15000u, v;
+    if (eng.mod_q < target)
+        eng.mod_q = target - eng.mod_q > step ? eng.mod_q + step : target;
+    else if (eng.mod_q > target)
+        eng.mod_q = eng.mod_q - target > step ? eng.mod_q - step : target;
+    if (eng.mod_wait)
+        eng.mod_wait--;
+    v = eng.mod_q >> 16;
+    if (v != eng.mod_sent && (!eng.mod_wait || v == 0u || v == 127u)) {
+        eng_send(0xB0u | proj.chan, 1, v);
+        eng.mod_sent = (uint8_t)v;
+        eng.mod_wait = MOD_GAP;
+    }
+}
+void engine_mod(int up) { eng.mod_up = (uint8_t)(up != 0); }
+static int eng_mod_val(void) { return eng.mod_sent; }
+
 void engine_tick(void)                           /* every millisecond (device: TIMER5 interrupt) */
 {
+    mod_tick();
     if (proj.clock == CLK_EXT)
         return;
     eng.phase += proj.tempo * 24u;
@@ -284,6 +308,12 @@ void engine_panic(void)
     uint32_t f = plat_lock();
     arp_off();
     seq_offs();
+    eng.mod_up = 0;                              /* the mod wheel straight down */
+    eng.mod_q = 0;
+    if (eng.mod_sent) {
+        eng_send(0xB0u | proj.chan, 1, 0);
+        eng.mod_sent = 0;
+    }
     eng.npool = 0;
     memset(eng.held, 0, sizeof eng.held);
     plat_unlock(f);

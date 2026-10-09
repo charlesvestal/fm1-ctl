@@ -1,8 +1,8 @@
 /* Bluetooth MIDI: JieLi's BT stack (btctrler.a, btstack.a, wl_rf_common.a: Apache-2.0, binary only;
  * the source may be shared, built firmware not until the licence is settled) on the shim in
  * ../../ble/shim. Started at every boot, as the stock firmware does, unless the last Bluetooth run
- * ended in a crash or a watchdog reset (then by hand, from the Bluetooth page). Part of the unity
- * build (main.c). A short log and a crash note survive a reset (the Bluetooth page shows them). */
+ * ended in a crash or a watchdog reset (then by hand, from the Setup page). Part of the unity
+ * build (main.c). A short log and a crash note survive a reset (the Setup page shows them). */
 #include "../../../ble/shim/shim.h"
 
 /* ---- the platform the shim asks for */
@@ -50,7 +50,7 @@ void shim_request_irq(int index, int prio, void (*handler)(void))
     irq_restore(f);
 }
 
-/* a short log for the screen, kept through a reset (.noinit): after a crash the Bluetooth page shows
+/* a short log for the screen, kept through a reset (.noinit): after a crash the Setup page shows
  * what the last run said, and a crash note */
 #define BLE_LOG_N 12
 #define BLE_LOG_MAGIC 0x424C4532u                 /* "BLE2" */

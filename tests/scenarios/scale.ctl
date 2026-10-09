@@ -22,5 +22,8 @@ key 1 up
 expect_out USB 80 39 00
 expect notes_on 0
 wait 50
+press ENV
+wait 50
 shot scale.png
+release ENV
 leds

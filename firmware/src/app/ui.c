@@ -5,11 +5,12 @@
  *   keys          chromatic from F3; with a scale: white keys the scale's steps, black keys its chords
  *   KNOB 1-4      the page's four values (on Play: the knob bank's four controllers)
  *   SELECT tempo  ALGORITHM MIDI channel  PRESETS program change
- *   FX            the next knob bank (A..D)      ARP  arpeggiator on / off
+ *   FX            the next knob bank (A..D); held on Play, KNOB 1-4 set the bank's controller numbers
+ *   ARP           the Arp page (KNOB 1 there turns it on: Off / On / Latch)
  *   PLAY          start / stop (the sequencer, MIDI start / stop)    REC  panic (all notes off)
  *   ENV           sustain while held            OCT- / OCT+  the octave (-3..+3)
- *   pages         HOME Play, SEL Scale, LFO Arp, SEQ Sequencer, GLO Knobs > Setup > Bluetooth;
- *                 EDIT steps through them all
+ *   LFO           the mod wheel (CC 1): up over a sixteenth while held, back down after
+ *   pages         one button each: HOME Play, SEL Keys, ARP Arp, SEQ Sequencer, GLO Sound, EDIT Setup
  *   SAVE          saves (it also saves by itself, a few seconds after a change)
  *
  * On the Sequencer page the keys edit instead of playing: white keys the selected track's 16 steps,
@@ -18,9 +19,9 @@
  * Out: everything played goes to USB and Bluetooth. Thru: USB in -> Bluetooth, Bluetooth in -> USB,
  * the TRS jack in -> USB and Bluetooth. */
 
-enum { V_PLAY, V_SCALE, V_ARP, V_SEQ, V_KNOBS, V_SETUP, V_BLE, V_SOUND, NVIEWS };
-static const char *const VIEW_NAME[NVIEWS] = {"Play", "Scale", "Arp", "Sequencer", "Knobs", "Setup", "Bluetooth", "Sound"};
-static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_SEL, B_LFO, B_SEQ, B_GLO, B_GLO, B_GLO};
+enum { V_PLAY, V_SCALE, V_ARP, V_SEQ, V_SOUND, V_SETUP, NVIEWS };
+static const char *const VIEW_NAME[NVIEWS] = {"Play", "Keys", "Arp", "Sequencer", "Sound", "Setup"};
+static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_SEL, B_ARP, B_SEQ, B_GLO, B_EDIT};
 static const char *const PORT_NAME[NPORTS] = {"USB", "BLE", "TRS"};
 static const char *const NOTE_NAME[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const SCALE_NAME[NSCALES] = {"Chromatic", "Major", "Minor", "Dorian", "Mixolydian",
@@ -33,6 +34,7 @@ static const char *const ARP_NAME[NARP] = {"Up", "Down", "Up-down", "Random", "A
 static const char *const RATE_NAME[NRATE] = {"1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 static const char *const CLOCK_NAME[NCLK] = {"Int", "Int, quiet", "Ext"};
 static const char *const GLOW_NAME[3] = {"Off", "Low", "High"};
+#include "gm_names.h"
 #define KEY0_NOTE 53                   /* chromatic: F3 is key 0 at octave 0 */
 #define SCALE0_NOTE 48                 /* a scale: its root from C3 at octave 0 */
 #define FLASH_MS 120u                  /* a port's light after a message */
@@ -66,6 +68,8 @@ static struct {
     uint32_t heard[4];                 /* notes held from MIDI in (any port), for the key lights */
     uint8_t playing;
     uint8_t sustain;
+    uint8_t fx_used;                   /* a knob turned while FX was held: no bank change at its release */
+    uint32_t fx_t;                     /* when FX went down */
     uint8_t dirty;
     uint32_t act_t;
     uint32_t in_t[NPORTS], out_t[NPORTS];   /* when each port last carried a message */
@@ -78,7 +82,7 @@ static struct {
     int8_t touched;                    /* the knob turned last (0..3), shown bright for a moment */
     uint32_t touch_until;
     uint32_t frame;
-    uint32_t sig[3];                   /* what each band shows: redrawn when it changes */
+    uint32_t sig[4];                   /* what each band shows: redrawn when it changes */
 } ui;
 
 static void say(const char *a, const char *b)
@@ -122,6 +126,14 @@ static char *put_note(char *b, int n)    /* C4 = 60 */
     if (n < 12)
         return put_s(b, "-1");
     return put_u(b, (uint32_t)(n / 12 - 1));
+}
+
+/* a program by name while the synth is on (the drum channel: the kit), else its number */
+static char *prog_name(char *b, uint32_t p)
+{
+    if (proj.sound == SOUND_OFF)
+        return put_u(put_s(b, "Program "), p + 1u);
+    return put_s(b, proj.chan == 9 ? "Drum kit" : GM_PROGRAM[p & 127u]);
 }
 
 /* ------------------------------------------------------------- MIDI --- */
@@ -260,7 +272,7 @@ static void midi_in(void)
         ui.in_t[port] = plat_ms();
         ui.n_in[port]++;
         send(pkt & ~0xF0u, THRU[port] | TO_NOSYNTH);  /* cable 0 */
-        if (proj.sound == SOUND_IN)
+        if (!proj.in_mute)
             send(pkt & ~0xF0u, TO_SYNTH);
         if (st >= 0xF8u) {
             engine_midi_clock(st);
@@ -279,18 +291,29 @@ static void midi_in(void)
 /* ------------------------------------------------------------ values --- */
 /* what a knob edits: one of these */
 enum { K_VAL0, K_VAL1, K_VAL2, K_VAL3, K_CC0, K_CC1, K_CC2, K_CC3, K_ROOT, K_SCALE, K_VEL, K_HUMAN,
-       K_AMODE, K_ARATE, K_AOCT, K_ALATCH, K_STEPS, K_HITS, K_ROT, K_NOTE, K_CLOCK, K_SEQCH, K_MASTER, K_GLOW,
-       K_BT, K_SOUND, K_NONE };
+       K_AMODE, K_ARATE, K_AOCT, K_ARP, K_STEPS, K_HITS, K_ROT, K_NOTE, K_CLOCK, K_SEQCH, K_MASTER, K_GLOW,
+       K_BT, K_SOUND, K_SNDIN, K_NONE };
 static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_VAL0, K_VAL1, K_VAL2, K_VAL3},
     {K_ROOT, K_SCALE, K_VEL, K_HUMAN},
-    {K_AMODE, K_ARATE, K_AOCT, K_ALATCH},
+    {K_ARP, K_AMODE, K_ARATE, K_AOCT},
     {K_STEPS, K_HITS, K_ROT, K_NOTE},
-    {K_CC0, K_CC1, K_CC2, K_CC3},
-    {K_CLOCK, K_SEQCH, K_MASTER, K_GLOW},
-    {K_BT, K_NONE, K_NONE, K_NONE},
-    {K_SOUND, K_NONE, K_NONE, K_NONE},
+    {K_SOUND, K_SNDIN, K_MASTER, K_NONE},
+    {K_CLOCK, K_SEQCH, K_GLOW, K_BT},
 };
+/* FX held on Play: the knobs set the bank's controller numbers, shown once it has been held a moment
+ * (a tap to change banks does not flash them) or a knob turns */
+#define FX_HOLD_MS 400u
+static int fx_cc(void)
+{
+    return ui.view == V_PLAY && (ui.btn >> B_FX & 1u) && (ui.fx_used || plat_ms() - ui.fx_t >= FX_HOLD_MS);
+}
+static int view_knob(int i)
+{
+    if (fx_cc())
+        return K_CC0 + i;
+    return VIEW_KNOB[ui.view][i];
+}
 
 static track_t *trk(void) { return &proj.trk[ui.track]; }
 static void track_name(int n, char *b);
@@ -309,7 +332,7 @@ static int knob_get(int k)
     case K_AMODE: return proj.arp_mode;
     case K_ARATE: return proj.arp_rate;
     case K_AOCT: return proj.arp_oct;
-    case K_ALATCH: return proj.arp_latch;
+    case K_ARP: return proj.arp_on ? 1 + proj.arp_latch : 0;
     case K_STEPS: return trk()->steps;
     case K_HITS: return trk()->hits;
     case K_ROT: return trk()->rot;
@@ -319,7 +342,8 @@ static int knob_get(int k)
     case K_MASTER: return proj.master_cc;
     case K_GLOW: return proj.glow;
     case K_BT: return plat_ble_state() != BLE_OFF;
-    case K_SOUND: return proj.sound;
+    case K_SOUND: return proj.sound != SOUND_OFF;
+    case K_SNDIN: return !proj.in_mute;
     default: return 0;
     }
 }
@@ -334,8 +358,8 @@ static void knob_range(int k, int *lo, int *hi)
     case K_AMODE: *hi = NARP - 1; break;
     case K_ARATE: *hi = NRATE - 1; break;
     case K_AOCT: *lo = 1; *hi = 3; break;
-    case K_ALATCH: case K_BT: *hi = 1; break;
-    case K_SOUND: *hi = NSOUND - 1; break;
+    case K_BT: case K_SOUND: case K_SNDIN: *hi = 1; break;
+    case K_ARP: *hi = 2; break;
     case K_STEPS: *lo = 1; *hi = 16; break;
     case K_HITS: *hi = trk()->steps; break;
     case K_ROT: *hi = trk()->steps - 1; break;
@@ -348,9 +372,9 @@ static void knob_range(int k, int *lo, int *hi)
 }
 static void knob_name(int k, char *b)
 {
-    static const char *const N[] = {"Root", "Scale", "Velocity", "Humanize", "Mode", "Rate", "Octaves", "Latch",
+    static const char *const N[] = {"Root", "Scale", "Velocity", "Humanize", "Mode", "Rate", "Octaves", "Arp",
                                     "Steps", "Hits", "Rotate", "Note", "Clock", "Seq ch", "MASTER", "Glow",
-                                    "Bluetooth", "Sound"};
+                                    "Bluetooth", "Sound", "MIDI in"};
     if (k <= K_VAL3)
         put_u(put_s(b, "CC "), proj.cc[proj.bank][k - K_VAL0]);
     else if (k <= K_CC3)
@@ -368,7 +392,7 @@ static void knob_text(int k, char *b)
     case K_SCALE: put_s(b, SCALE_NAME[v]); break;
     case K_AMODE: put_s(b, ARP_NAME[v]); break;
     case K_ARATE: put_s(b, RATE_NAME[v]); break;
-    case K_ALATCH: put_s(b, v ? "On" : "Off"); break;
+    case K_ARP: put_s(b, v == 2 ? "Latch" : v ? "On" : "Off"); break;
     case K_NOTE: track_name(v, b); break;
     case K_CLOCK: put_s(b, CLOCK_NAME[v]); break;
     case K_SEQCH: put_u(b, (uint32_t)v + 1u); break;
@@ -376,10 +400,11 @@ static void knob_text(int k, char *b)
         if (v)
             put_u(put_s(b, "CC "), (uint32_t)v);
         else
-            put_s(b, "Off");
+            put_s(b, "Volume");
         break;
     case K_GLOW: put_s(b, GLOW_NAME[v]); break;
-    case K_SOUND: put_s(b, v == SOUND_IN ? "Keys + in" : v == SOUND_KEYS ? "Keys" : "Off"); break;
+    case K_SOUND: put_s(b, v ? "On" : "Off"); break;
+    case K_SNDIN: put_s(b, v ? "Plays" : "Ignored"); break;
     case K_BT: {
         static const char *const S[] = {"Off", "On", "On", "Failed"};
         put_s(b, S[plat_ble_state() & 3]);
@@ -421,7 +446,16 @@ static void knob_set(int k, int v)
         case K_AMODE: proj.arp_mode = (uint8_t)v; break;
         case K_ARATE: proj.arp_rate = (uint8_t)v; break;
         case K_AOCT: proj.arp_oct = (uint8_t)v; break;
-        case K_ALATCH: proj.arp_latch = (uint8_t)v; arp_latch_changed(); break;
+        case K_ARP:
+            if (!v != !proj.arp_on) {
+                all_keys_up();
+                arp_set(v != 0);
+            }
+            if (v) {
+                proj.arp_latch = (uint8_t)(v == 2);
+                arp_latch_changed();
+            }
+            break;
         case K_STEPS: trk()->steps = (uint8_t)v; track_regen(); break;
         case K_HITS: trk()->hits = (uint8_t)v; track_regen(); break;
         case K_ROT: trk()->rot = (uint8_t)v; track_regen(); break;
@@ -431,10 +465,14 @@ static void knob_set(int k, int v)
         case K_MASTER: proj.master_cc = (uint8_t)v; ui.master_sent = -1; break;
         case K_GLOW: proj.glow = (uint8_t)v; break;
         case K_SOUND:
-            if (v == SOUND_OFF)
+            if (!v)
                 gm_panic();
-            proj.sound = (uint8_t)v;
-            ui.master_sent = -1;
+            proj.sound = (uint8_t)(v ? SOUND_IN : SOUND_OFF);
+            break;
+        case K_SNDIN:
+            if (!v)
+                gm_panic();              /* notes from MIDI in may be sounding */
+            proj.in_mute = (uint8_t)!v;
             break;
         case K_BT:
             if (v && plat_ble_state() == BLE_OFF) {
@@ -492,6 +530,7 @@ static void button_down(int b)
         ui.sustain = 1;
         cc(64, 127);
         break;
+    case B_LFO: engine_mod(1); break;
     case B_PLAY:
         ui.playing = (uint8_t)!ui.playing;
         engine_play(ui.playing);
@@ -500,22 +539,11 @@ static void button_down(int b)
     case B_REC: panic(); break;
     case B_OCTDN: octave(-1); break;
     case B_OCTUP: octave(1); break;
-    case B_ARP:
-        all_keys_up();
-        arp_set(!proj.arp_on);
-        say("ARP", proj.arp_on ? "ON" : "OFF");
-        mark_dirty();
+    case B_FX:
+        set_view(V_PLAY);                /* held: the knobs set the controller numbers; a tap: the next bank */
+        ui.fx_used = 0;
+        ui.fx_t = plat_ms();
         break;
-    case B_FX: {
-        char t[2] = {0, 0};
-        proj.bank = (uint8_t)((proj.bank + 1u) % NBANKS);
-        t[0] = (char)('A' + proj.bank);
-        if (ui.view != V_KNOBS)
-            set_view(V_PLAY);
-        say("KNOB BANK", t);
-        mark_dirty();
-        break;
-    }
     default: break;
     }
 }
@@ -527,12 +555,23 @@ static void button_up(int b)
         ui.sustain = 0;
         cc(64, 0);
         break;
+    case B_LFO: engine_mod(0); break;
+    case B_FX:
+        if (!ui.fx_used) {
+            char t[2] = {0, 0};
+            proj.bank = (uint8_t)((proj.bank + 1u) % NBANKS);
+            t[0] = (char)('A' + proj.bank);
+            say("KNOB BANK", t);
+            mark_dirty();
+        }
+        ui.touched = -1;
+        break;
     case B_HOME: set_view(V_PLAY); break;
     case B_SEL: set_view(V_SCALE); break;
-    case B_LFO: set_view(V_ARP); break;
     case B_SEQ: set_view(V_SEQ); break;
-    case B_GLO: set_view(ui.view == V_KNOBS ? V_SETUP : ui.view == V_SETUP ? V_BLE : ui.view == V_BLE ? V_SOUND : V_KNOBS); break;
-    case B_EDIT: set_view((ui.view + 1) % NVIEWS); break;
+    case B_ARP: set_view(V_ARP); break;
+    case B_GLO: set_view(V_SOUND); break;
+    case B_EDIT: set_view(V_SETUP); break;
     case B_SAVE:
         if (project_save() == 0) {
             ui.dirty = 0;
@@ -568,7 +607,7 @@ static void master_pot(void)
 {
     int32_t raw = (int32_t)plat_master(), v;
     ui.master_raw += (raw - ui.master_raw) / 4;
-    if (!proj.master_cc || proj.sound != SOUND_OFF)   /* with the synth on, MASTER is its volume */
+    if (!proj.master_cc)                 /* 0: the synth's volume (main_fm1.c) */
         return;
     v = ui.master_raw * 127 / 4000;
     if (v > 127)
@@ -628,13 +667,16 @@ static void input(void)
         if (p != proj.program) {
             proj.program = (uint8_t)p;
             play(0xC0u, (uint32_t)p, 0);
-            put_u(put_s(ui.last, "Program "), (uint32_t)p + 1u);
+            prog_name(put_s(put_u(ui.last, (uint32_t)p + 1u), " "), p);
             mark_dirty();
         }
     }
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
-            int k = VIEW_KNOB[ui.view][i], lo, hi;
+            int k, lo, hi;
+            if (ui.btn >> B_FX & 1u)
+                ui.fx_used = 1;
+            k = view_knob((int)i);
             if (k != K_NONE) {
                 knob_range(k, &lo, &hi);
                 knob_set(k, knob_get(k) + accel(EN_K1 + (int)i, e, hi - lo));
@@ -646,10 +688,12 @@ static void input(void)
 }
 
 /* ------------------------------------------------------------- screen --- */
-/* three bands: the header (28 px), the page (144), the knobs (68) */
+/* four bands: the header (28 px), the page (124), the status line (20), the knobs (68) */
 #define HDR_H 28
 #define MAIN_Y 28
-#define MAIN_H 144
+#define MAIN_H 124
+#define STAT_Y 152
+#define STAT_H 20
 #define KNB_Y 172
 #define KNB_H 68
 
@@ -714,12 +758,10 @@ static void draw_header(void)
         cv_text(x + 8, 6, &FONT_B, ui.msg[1], K_HOT);
     } else {
         int32_t x = cv_text(10, 6, &FONT_B, VIEW_NAME[ui.view], K_TEXT) + 6;
-        if (ui.view == V_PLAY || ui.view == V_KNOBS) {
+        if (ui.view == V_PLAY) {
             char b[2] = {(char)('A' + proj.bank), 0};
             x += tag(x, 6, b, K_COOL_T, K_COOL) + 4;
         }
-        if (proj.arp_on)
-            x += tag(x, 6, "ARP", K_HOT_T, K_HOT) + 4;
         if (ui.dirty)
             cv_round(x + 2, 12, 5, 5, 2, K_DIM);
         x = 232;                         /* right: channel, tempo with the beat, Bluetooth */
@@ -805,29 +847,9 @@ static void draw_ports(int32_t y0)
 
 static void draw_play(void)
 {
-    char t[24];
     cv_text(12, 4, &FONT_B, ui.last[0] ? ui.last : "Play a key", ui.last[0] ? K_TEXT : K_DIM);
-    if (ui.sustain)
-        tag(232 - text_w(&FONT_XS, "SUSTAIN") - 10, 6, "SUSTAIN", K_HOT_T, K_HOT);
-    draw_keys(30, 46);
-    if (proj.scale) {
-        char *b = put_s(t, NOTE_NAME[proj.root]);
-        put_s(put_s(b, " "), SCALE_NAME[proj.scale]);
-        cv_text(4, 78, &FONT_XS, t, K_DIM);
-    } else {
-        put_note(t, KEY0_NOTE + 12 * proj.octave);
-        cv_text(4, 78, &FONT_XS, t, K_DIM);
-        put_note(t, KEY0_NOTE + 12 * proj.octave + NKEYS - 1);
-        cv_text(236 - text_w(&FONT_XS, t), 78, &FONT_XS, t, K_DIM);
-    }
-    {
-        char a[16], b[16];
-        put_u(put_s(a, "vel "), proj.vel);
-        put_u(put_s(b, "prog "), proj.program + 1u);
-        text_c(proj.scale ? 150 : 80, 78, &FONT_XS, a, K_DIM);
-        text_c(proj.scale ? 205 : 160, 78, &FONT_XS, b, K_DIM);
-    }
-    draw_ports(100);
+    draw_keys(32, 46);
+    draw_ports(86);
 }
 
 static void draw_scale(void)
@@ -869,7 +891,7 @@ static void draw_arp(void)
         put_s(b, "  latch");
     cv_text(12, 22, &FONT_XS, t, K_DIM);
     if (!proj.arp_on) {
-        cv_text(12, 50, &FONT_XS, "ARP turns it on; then hold notes or chords.", K_DIM);
+        cv_text(12, 50, &FONT_XS, "KNOB 1 turns it on; then hold notes or chords.", K_DIM);
         return;
     }
     if (!n)
@@ -905,13 +927,13 @@ static void draw_seq(void)
     int t, s;
     for (t = 0; t < NTRACKS; t++) {
         const track_t *k = &proj.trk[t];
-        int32_t y = 6 + t * 34, pos = eng_track_pos(t);
+        int32_t y = 5 + t * 30, pos = eng_track_pos(t);
         int sel = t == ui.track;
         char nm[12];
         track_name(k->note, nm);
         if (sel)
-            cv_round(2, y - 3, 236, 32, 6, K_PANEL);
-        cv_text(6, y + 4, &FONT_XS, nm, k->mute ? K_LINE : sel ? K_TEXT : K_DIM);
+            cv_round(2, y - 3, 236, 28, 6, K_PANEL);
+        cv_text(6, y + 2, &FONT_XS, nm, k->mute ? K_LINE : sel ? K_TEXT : K_DIM);
         for (s = 0; s < 16; s++) {
             int32_t x = 40 + s * 12;
             int on = k->pat >> s & 1u, cur = s == pos;
@@ -919,35 +941,34 @@ static void draw_seq(void)
             if (s >= k->steps)
                 continue;
             c = on ? (k->mute ? K_LINE : cur ? K_TEXT : K_HOT) : cur ? K_DIM : (s % 4 ? K_KEYW : K_HOT_T);
-            cv_round(x, y, 11, 26, 3, c);
+            cv_round(x, y, 11, 22, 3, c);
         }
     }
 }
 
-static void draw_knobs_page(void)
+static void draw_setup(void)                     /* the settings below; Bluetooth and its log here */
 {
-    char t[40], *b;
-    b = put_s(t, "Bank ");
-    b[0] = (char)('A' + proj.bank);
-    b[1] = 0;
-    cv_text(12, 2, &FONT_B, t, K_TEXT);
-    cv_text(12, 26, &FONT_XS, "KNOB 1-4 set this bank's controller numbers.", K_DIM);
-    cv_text(12, 42, &FONT_XS, "FX steps through the banks, A to D.", K_DIM);
-    cv_text(12, 58, &FONT_XS, "GLO again: Setup, then Bluetooth.", K_DIM);
+    char t[40];
+    int s = plat_ble_state(), i, n;
+    const char *st = plat_ble_connected() ? "connected" : s == BLE_READY ? "advertising" :
+                     s == BLE_STARTING ? "starting" : s == BLE_FAILED ? "failed" : "off";
+    put_s(put_s(t, "Bluetooth "), st);
+    cv_text(10, 2, &FONT_S, t, plat_ble_connected() ? K_COOL : K_TEXT);
+    cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_LINE);
+    if (s == BLE_OFF) {
+        cv_text(10, 20, &FONT_XS, "Off after a crash: KNOB 4 starts it", K_DIM);
+    } else {
+        char *b = put_u(put_s(t, "Name FM-1   in "), ui.n_in[PORT_BLE]);
+        put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);
+        cv_text(10, 20, &FONT_XS, t, K_DIM);
+    }
+    n = (int)plat_ble_log_total();       /* the log, the newest last (kept through a reset): seven lines, */
+    if (n > 7)                           /* the whole crash note */
+        n = 7;
+    for (i = 0; i < n; i++)
+        cv_text(8, 36 + (6 - (n - 1 - i)) * 12, &FONT_XS, plat_ble_log_line(n - 1 - i), K_DIM);
 }
 
-static void draw_setup(void)
-{
-    static const char *const L[] = {"SELECT tempo   ALGORITHM channel", "PRESETS program   FX knob bank",
-                                    "ARP arpeggiator   ENV sustain", "PLAY start / stop   REC panic",
-                                    "HOME play  SEL scale  LFO arp  SEQ seq", "GLO knobs, setup, Bluetooth"};
-    int i;
-    for (i = 0; i < 6; i++)
-        cv_text(12, 4 + i * 18, &FONT_XS, L[i], K_DIM);
-    cv_text(12, 4 + 6 * 18, &FONT_XS, "Firmware " CT_VERSION, K_LINE);
-}
-
-#include "gm_names.h"
 static void draw_sound(void)                     /* the onboard GM synth: what it plays, and its load */
 {
     char t[40];
@@ -955,7 +976,6 @@ static void draw_sound(void)                     /* the onboard GM synth: what i
     if (proj.sound == SOUND_OFF) {
         cv_text(12, 2, &FONT_B, "Off", K_TEXT);
         cv_text(12, 24, &FONT_XS, "KNOB 1 turns the onboard GM sounds on.", K_DIM);
-        cv_text(12, 42, &FONT_XS, "MASTER sends its controller (Setup).", K_DIM);
         return;
     }
     cv_text(12, 2, &FONT_B, proj.chan == 9 ? "Drum kit" : GM_PROGRAM[p], K_TEXT);
@@ -964,31 +984,10 @@ static void draw_sound(void)                     /* the onboard GM synth: what i
     else
         put_u(put_s(t, "GM program "), p + 1u);
     cv_text(12, 22, &FONT_XS, t, K_DIM);
-    cv_text(12, 46, &FONT_XS, proj.sound == SOUND_IN ? "Plays Ctl's notes and MIDI in" : "Plays Ctl's notes (not MIDI in)", K_DIM);
-    cv_text(12, 64, &FONT_XS, "PRESETS picks the program. MASTER: volume.", K_DIM);
+    cv_text(12, 46, &FONT_XS, proj.in_mute ? "Plays Ctl's notes (not MIDI in)" : "Plays Ctl's notes and MIDI in", K_DIM);
+    cv_text(12, 64, &FONT_XS, "PRESETS picks the sound.", K_DIM);
     put_s(put_u(put_s(put_u(put_s(t, "Voices "), gm_voices), "    CPU "), plat_cpu_pct()), "%");
     cv_text(12, 90, &FONT_XS, t, K_DIM);
-}
-
-static void draw_ble(void)
-{
-    char t[40];
-    int s = plat_ble_state(), i, n;
-    const char *big = plat_ble_connected() ? "Connected" : s == BLE_READY ? "Advertising" :
-                      s == BLE_STARTING ? "Starting" : s == BLE_FAILED ? "Failed" : "Off";
-    cv_text(12, 2, &FONT_B, big, plat_ble_connected() ? K_COOL : K_TEXT);
-    if (s == BLE_OFF) {
-        cv_text(12, 22, &FONT_XS, "Off after a crash: KNOB 1 starts it", K_DIM);
-    } else {
-        char *b = put_u(put_s(t, "Name: FM-1    in "), ui.n_in[PORT_BLE]);
-        put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);
-        cv_text(12, 22, &FONT_XS, t, K_DIM);
-    }
-    n = (int)plat_ble_log_total();       /* the log, the newest last (kept through a reset): seven lines, */
-    if (n > 7)                           /* the whole crash note */
-        n = 7;
-    for (i = 0; i < n; i++)
-        cv_text(8, 40 + (6 - (n - 1 - i)) * 14, &FONT_XS, plat_ble_log_line(n - 1 - i), K_DIM);
 }
 
 static void draw_main(void)
@@ -1002,7 +1001,7 @@ static void draw_main(void)
     h = hash(hash(h, proj.root | proj.scale << 4 | proj.arp_on << 8 | proj.arp_mode << 9 | proj.arp_rate << 12 |
                          proj.arp_oct << 15 | proj.arp_latch << 17 | ui.track << 18),
              (uint32_t)eng_arp_note());
-    h = hash_s(h, ui.last);
+    h = hash(hash_s(h, ui.last), proj.sound | (uint32_t)proj.chan << 4);
     for (p = 0; p < NPORTS; p++)
         h = hash(h, (uint32_t)lit(ui.in_t, (int)p) | (uint32_t)lit(ui.out_t, (int)p) << 1);
     h = hash(h, (uint32_t)plat_ble_state() | (uint32_t)plat_ble_connected() << 4);
@@ -1014,8 +1013,9 @@ static void draw_main(void)
                                  (uint32_t)proj.trk[i].note << 22),
                      (uint32_t)eng_track_pos(i));
     if (ui.view == V_SOUND)
-        h = hash(hash(h, gm_voices | proj.sound << 8 | (uint32_t)gm_program[proj.chan] << 16), plat_cpu_pct());
-    if (ui.view == V_BLE) {
+        h = hash(hash(h, gm_voices | proj.sound << 8 | proj.in_mute << 12 | (uint32_t)gm_program[proj.chan] << 16),
+                 plat_cpu_pct());
+    if (ui.view == V_SETUP) {
         h = hash(hash(h, plat_ble_log_total()), ui.n_in[PORT_BLE] ^ ui.n_out[PORT_BLE] << 16);
         for (i = 0; i < 7; i++)
             h = hash_s(h, plat_ble_log_line(i));
@@ -1029,20 +1029,46 @@ static void draw_main(void)
     case V_SCALE: draw_scale(); break;
     case V_ARP: draw_arp(); break;
     case V_SEQ: draw_seq(); break;
-    case V_KNOBS: draw_knobs_page(); break;
-    case V_SETUP: draw_setup(); break;
     case V_SOUND: draw_sound(); break;
-    default: draw_ble(); break;
+    default: draw_setup(); break;
     }
     cv_blit(0, MAIN_Y);
 }
 
+/* the status line, on every page: the lowest key, the arp and sustain, and the program */
+static void draw_status(void)
+{
+    char t[24];
+    int32_t x;
+    uint32_t h = hash(hash(hash(2166136261u, (uint32_t)(proj.octave + 3) | proj.scale << 4 | proj.root << 8 |
+                                                 ui.sustain << 12 | proj.arp_on << 13 | proj.arp_latch << 14 |
+                                                 (uint32_t)(eng_mod_val() != 0) << 15),
+                           proj.program | proj.sound << 8 | (uint32_t)proj.chan << 12), ui.view);
+    if (h == ui.sig[3])
+        return;
+    ui.sig[3] = h;
+    cv_begin(240, STAT_H, K_BG);
+    cv_rect(8, 0, 224, 1, K_LINE);
+    put_note(put_s(t, "Lowest "), proj.scale ? SCALE0_NOTE + proj.root + 12 * proj.octave : KEY0_NOTE + 12 * proj.octave);
+    x = cv_text(8, 3, &FONT_XS, t, K_DIM) + 8;
+    if (proj.arp_on)
+        x += tag(x, 2, proj.arp_latch ? "LATCH" : "ARP", K_HOT_T, K_HOT) + 4;
+    if (ui.sustain)
+        x += tag(x, 2, "SUSTAIN", K_HOT_T, K_HOT) + 4;
+    if (eng_mod_val())
+        tag(x, 2, "MOD", K_HOT_T, K_HOT);
+    prog_name(t, proj.program);
+    cv_text(232 - text_w(&FONT_XS, t), 3, &FONT_XS, t, K_TEXT);
+    cv_blit(0, STAT_Y);
+}
+
 static void draw_knobs(void)
 {
-    uint32_t h = hash(2166136261u, ui.view | (uint32_t)ui.touched << 8 | proj.bank << 16 | ui.track << 20), i;
+    uint32_t h = hash(2166136261u, ui.view | (uint32_t)ui.touched << 8 | proj.bank << 16 | ui.track << 20 |
+                                       (uint32_t)fx_cc() << 24), i;
     int now_touch = plat_ms() < ui.touch_until;
     for (i = 0; i < 4; i++)
-        h = hash(hash(h, (uint32_t)knob_get(VIEW_KNOB[ui.view][i])), proj.cc[proj.bank][i]);
+        h = hash(hash(h, (uint32_t)knob_get(view_knob((int)i))), proj.cc[proj.bank][i]);
     h = hash(hash(h, (uint32_t)now_touch), (uint32_t)plat_ble_state());
     if (h == ui.sig[2])
         return;
@@ -1050,7 +1076,7 @@ static void draw_knobs(void)
     cv_begin(240, KNB_H, K_BG);
     cv_round(4, 2, 232, KNB_H - 6, 6, K_PANEL);
     for (i = 0; i < 4; i++) {
-        int k = VIEW_KNOB[ui.view][i], lo, hi, v;
+        int k = view_knob((int)i), lo, hi, v;
         int32_t x = (int32_t)i * 60, cx = x + 30, bw;
         int hot = now_touch && ui.touched == (int)i;
         char t[16];
@@ -1088,10 +1114,10 @@ static void leds(void)
     uint32_t b = 1u << VIEW_BTN[ui.view], k = 0, db, dk = 0, i;
     if (ui.playing && eng_beat_on())             /* playing: PLAY green, bright on the beat */
         b |= LED_PLAY_GREEN;
-    if (proj.arp_on)
-        b |= 1u << B_ARP;
     if (ui.sustain)
         b |= 1u << B_ENV;
+    if (eng_mod_val())
+        b |= 1u << B_LFO;
     if (proj.octave < 0)
         b |= 1u << B_OCTDN;
     if (proj.octave > 0)
@@ -1162,6 +1188,7 @@ void ui_frame(void)
     plat_yield();
     draw_main();
     plat_yield();
+    draw_status();
     draw_knobs();
     leds();
     ui.frame++;

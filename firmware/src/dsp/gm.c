@@ -16,6 +16,7 @@ static EAS_DATA_HANDLE eas;
 static EAS_HANDLE stream;
 static int ready;
 static int skipped;                               /* gm_skip ran: every note off at the next render */
+static int poly = GM_VOICES;                      /* the polyphony now: gm_overload lowers it */
 
 /* the queue: 3-byte messages, the main loop writes, the render reads */
 #define QN 256u
@@ -56,6 +57,7 @@ int gm_init(void)
 {
     if (EAS_Init(&eas) != EAS_SUCCESS || EAS_OpenMIDIStream(eas, &stream, NULL) != EAS_SUCCESS)
         return -1;
+    EAS_SetSynthPolyphony(eas, 0, poly);          /* not the library's 64: ~2.5% CPU a voice */
     ready = 1;
     return 0;
 }
@@ -102,6 +104,14 @@ void gm_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     }
     gm_level = peak;
     gm_voices = (uint8_t)(eas->pVoiceMgr ? eas->pVoiceMgr->activeVoices : 0);
+}
+
+void gm_overload(void)
+{
+    if (ready && poly > GM_VOICES_MIN) {
+        poly -= 4;
+        EAS_SetSynthPolyphony(eas, 0, poly);      /* the oldest voices are stolen */
+    }
 }
 
 void gm_skip(int32_t *out, uint32_t n)

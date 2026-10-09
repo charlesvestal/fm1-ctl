@@ -14,7 +14,7 @@ Bluetooth, Bluetooth to USB, and the TRS jack (MIDI in) to both. No sound.
 **[MANUAL.md](MANUAL.md)** explains every control, page and setting.
 
 Bluetooth starts at every boot, as on the stock firmware, and advertises as "FM-1". On a Mac: Audio
-MIDI Setup, Window, Show MIDI Studio, the Bluetooth button, then Connect. The Bluetooth page shows the
+MIDI Setup, Window, Show MIDI Studio, the Bluetooth button, then Connect. The Setup page (EDIT) shows the
 stack's log, which survives a reset (after a crash it starts with the crash note).
 
 Hold OCT− and OCT+ for 5 seconds for Felucca's update mode. Two failed starts in a row give safe
