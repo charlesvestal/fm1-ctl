@@ -84,16 +84,6 @@ int gm_init(void)
 /* 2x up: each EAS sample and the halfway point to the next (linear), one sample late */
 static EAS_PCM pcm[EAS_FRAMES * 2];
 static int32_t prev_l, prev_r;
-/* DC blocker (one pole at ~3.5 Hz): EAS's reverb feedback rounds towards a DC offset (to -55 dB), which
- * would step to 0 when its tail stops; and a voice ending with an offset clicks */
-static float dc_xl, dc_xr, dc_yl, dc_yr;
-static inline int32_t dc_block(int32_t x, float *px, float *py)
-{
-    float y = (float)x - *px + 0.999f * *py;
-    *px = (float)x;
-    *py = y;
-    return (int32_t)y;
-}
 void gm_render(int32_t *out, uint32_t n, uint32_t gain_q12)
 {
     const int32_t g = (int32_t)gain_q12;          /* Q12 */
@@ -116,8 +106,7 @@ void gm_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         EAS_I32 got = 0;
         EAS_Render(eas, pcm, (EAS_I32)k, &got);
         for (i = 0; i < k; i++) {
-            int32_t l = dc_block((i < (uint32_t)got) ? pcm[2 * i] : 0, &dc_xl, &dc_yl),
-                    r = dc_block((i < (uint32_t)got) ? pcm[2 * i + 1] : 0, &dc_xr, &dc_yr);
+            int32_t l = (i < (uint32_t)got) ? pcm[2 * i] : 0, r = (i < (uint32_t)got) ? pcm[2 * i + 1] : 0;
             int32_t ml = (l + prev_l) >> 1, mr = (r + prev_r) >> 1;
             int32_t a = l < 0 ? -l : l;
             if ((float)a * (1.f / 16384.f) > peak)    /* after the 6 dB made up, MASTER full */
