@@ -25,8 +25,8 @@
  *   $Revision: 794 $
  *   $Date: 2007-08-01 00:08:48 -0700 (Wed, 01 Aug 2007) $
  *----------------------------------------------------------------------------
- * Changed for Ctl (FM-1), 2026: VMRender keeps the reverb and chorus running for a tail after
- * the last voice sent to them (FX_TAIL_FRAMES); they stopped with it, cutting their sound off.
+ * Changed for Ctl (FM-1), 2026, as for Polly: the reverb and chorus sends summed in 32 bits and clamped,
+ * and the effects ringing out after the last send and starting clean; marked "Ctl (from Polly):".
  *----------------------------------------------------------------------------
 */
 
@@ -2996,6 +2996,23 @@ match_success:
     return;
 }
 
+#if defined(_CC_REVERB) || defined(_CC_CHORUS)
+/* Ctl (from Polly): the effects' tails, in blocks of BUFFER_SIZE_IN_MONO_SAMPLES (5.8 ms at 22.05 kHz): the reverb's
+ * longest room rings ~3 s, the chorus's delay ~0.1 s */
+#define REVERB_TAIL_BLOCKS 520
+#define CHORUS_TAIL_BLOCKS 18
+void ReverbClear(EAS_VOID_PTR pInstData);
+void ChorusClear(EAS_VOID_PTR pInstData);
+/* Ctl (from Polly): a send's 32-bit sum to the effect's 16-bit input, clamped */
+static void VMSendClamp(const EAS_I32 *sum, EAS_PCM *out)
+{
+    for (EAS_INT i = 0; i < BUFFER_SIZE_IN_MONO_SAMPLES * NUM_OUTPUT_CHANNELS; i++) {
+        EAS_I32 v = sum[i];
+        out[i] = (EAS_PCM)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+    }
+}
+#endif
+
 /*----------------------------------------------------------------------------
  * VMAddSamples()
  *----------------------------------------------------------------------------
@@ -3024,18 +3041,17 @@ EAS_I32 VMAddSamples (S_VOICE_MGR *pVoiceMgr, EAS_I32 *pMixBuffer, EAS_I32 numSa
     EAS_I32 synthBuffer[NUM_OUTPUT_CHANNELS * BUFFER_SIZE_IN_MONO_SAMPLES];
     EAS_BOOL reverbProcess = EAS_FALSE;
     EAS_BOOL chorusProcess = EAS_FALSE;
-    /* Ctl: frames the effects still run after the last send: their tail (4 s), not cut */
-#define FX_TAIL_FRAMES ((4 * _OUTPUT_SAMPLE_RATE) / BUFFER_SIZE_IN_MONO_SAMPLES)
-    static EAS_I32 reverbTail, chorusTail;
 
     EAS_U16 sendLevel;
 
+    /* Ctl (from Polly): the sends are summed in 32 bits and clamped to the effects' 16 (summed in 16 they wrapped: loud
+     * notes with full sends burst into noise) */
 #ifdef _CC_CHORUS
-    EAS_HWMemSet(pVoiceMgr->chorusSendBuffer, 0, sizeof(pVoiceMgr->chorusSendBuffer));
+    EAS_HWMemSet(pVoiceMgr->chorusSendSum, 0, sizeof(pVoiceMgr->chorusSendSum));
 #endif
 
 #ifdef _CC_REVERB
-    EAS_HWMemSet(pVoiceMgr->reverbSendBuffer, 0, sizeof(pVoiceMgr->reverbSendBuffer));
+    EAS_HWMemSet(pVoiceMgr->reverbSendSum, 0, sizeof(pVoiceMgr->reverbSendSum));
 #endif
 
     voicesRendered = 0;
@@ -3085,7 +3101,7 @@ EAS_I32 VMAddSamples (S_VOICE_MGR *pVoiceMgr, EAS_I32 *pMixBuffer, EAS_I32 numSa
                     sendLevel = pSynth->reverbSendLevels[channel & 15];
                 }
                 if (pSynth->reverbEnabled && sendLevel != 0) {
-                    pVoiceMgr->reverbSendBuffer[i] += synthBuffer[i] * sendLevel / 128;
+                    pVoiceMgr->reverbSendSum[i] += synthBuffer[i] * sendLevel / 128;
                     reverbProcess = EAS_TRUE;
                 }
 #endif
@@ -3102,7 +3118,7 @@ EAS_I32 VMAddSamples (S_VOICE_MGR *pVoiceMgr, EAS_I32 *pMixBuffer, EAS_I32 numSa
                     sendLevel = pSynth->chorusSendLevels[channel & 15];
                 }
                 if (pSynth->chorusEnabled && sendLevel != 0) {
-                    pVoiceMgr->chorusSendBuffer[i] += synthBuffer[i] * sendLevel / 128;
+                    pVoiceMgr->chorusSendSum[i] += synthBuffer[i] * sendLevel / 128;
                     chorusProcess = EAS_TRUE;
                 }
 #endif
@@ -3133,12 +3149,22 @@ EAS_I32 VMAddSamples (S_VOICE_MGR *pVoiceMgr, EAS_I32 *pMixBuffer, EAS_I32 numSa
         }
     }
 
+    /* Ctl (from Polly): an effect runs while a voice sends to it and then for its tail (fed silence), so it rings out
+     * instead of stopping dead when the last voice ends; idle, it costs nothing, and starting again it
+     * starts clean (a frozen tail would replay into the next note) */
 #if defined (_CC_CHORUS)
-    if (chorusProcess)
-        chorusTail = FX_TAIL_FRAMES;
-    else if (chorusTail > 0)
-        chorusTail--, chorusProcess = EAS_TRUE;
+    if (pVoiceMgr->chorusModule.effectData != NULL) {
+        if (chorusProcess) {
+            if (!pVoiceMgr->chorusTail)
+                ChorusClear(pVoiceMgr->chorusModule.effectData);
+            pVoiceMgr->chorusTail = CHORUS_TAIL_BLOCKS;
+        }
+        chorusProcess = pVoiceMgr->chorusTail != 0;
+        if (chorusProcess)
+            pVoiceMgr->chorusTail--;
+    }
     if (chorusProcess && pVoiceMgr->chorusModule.effectData != NULL) {
+        VMSendClamp(pVoiceMgr->chorusSendSum, pVoiceMgr->chorusSendBuffer);
         pVoiceMgr->chorusModule.effect->pfProcess(pVoiceMgr->chorusModule.effectData, pVoiceMgr->chorusSendBuffer, pVoiceMgr->chorusSendBuffer, numSamples);
         for (EAS_INT i = 0; i < BUFFER_SIZE_IN_MONO_SAMPLES * NUM_OUTPUT_CHANNELS; i++) {
             pMixBuffer[i] = pMixBuffer[i] + pVoiceMgr->chorusSendBuffer[i];
@@ -3148,11 +3174,18 @@ EAS_I32 VMAddSamples (S_VOICE_MGR *pVoiceMgr, EAS_I32 *pMixBuffer, EAS_I32 numSa
     // GM2 specification says there is a connection from chorus output to reverb send
     // but where is its CC controller
 #if defined (_CC_REVERB)
-    if (reverbProcess)
-        reverbTail = FX_TAIL_FRAMES;
-    else if (reverbTail > 0)
-        reverbTail--, reverbProcess = EAS_TRUE;
+    if (pVoiceMgr->reverbModule.effectData != NULL) {
+        if (reverbProcess) {
+            if (!pVoiceMgr->reverbTail)
+                ReverbClear(pVoiceMgr->reverbModule.effectData);
+            pVoiceMgr->reverbTail = REVERB_TAIL_BLOCKS;
+        }
+        reverbProcess = pVoiceMgr->reverbTail != 0;
+        if (reverbProcess)
+            pVoiceMgr->reverbTail--;
+    }
     if (reverbProcess && pVoiceMgr->reverbModule.effectData != NULL) {
+        VMSendClamp(pVoiceMgr->reverbSendSum, pVoiceMgr->reverbSendBuffer);
         pVoiceMgr->reverbModule.effect->pfProcess(pVoiceMgr->reverbModule.effectData, pVoiceMgr->reverbSendBuffer, pVoiceMgr->reverbSendBuffer, numSamples);
         for (EAS_INT i = 0; i < BUFFER_SIZE_IN_MONO_SAMPLES * NUM_OUTPUT_CHANNELS; i++) {
             pMixBuffer[i] = pMixBuffer[i] + pVoiceMgr->reverbSendBuffer[i];

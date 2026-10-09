@@ -37,6 +37,7 @@ out; it contains no JieLi code and may be shared as it is.
 
 | What | Licence | Where |
 | --- | --- | --- |
+| The GM synth: `firmware/src/dsp/eas/` (Sonivox EAS, its 200 KB GM sound set, `eas_host_fm1.c` our host wrapper). Changed as for Polly: the reverb and chorus sends summed in 32 bits and clamped to 16, and the effects ringing out after the last send and starting clean (`eas_voicemgt.c`, `eas_synth.h`, `eas_reverb.c`, `eas_chorus.c`); each change marked "Ctl (from Polly):" | Apache-2.0, Copyright (c) 2004-2006 Sonic Network Inc., 2008 The Android Open Source Project | `firmware/src/dsp/eas/` (`LICENSE-2.0.txt`, `NOTICE`); <https://github.com/EmbeddedSynth/sonivox> |
 | Barlow Semi Condensed (The Barlow Project Authors), the UI face | SIL OFL 1.1 | `assets/fonts/BarlowSemiCondensed-*.ttf`, `assets/fonts/Barlow-OFL.txt` |
 | Terminus (Dimitar Toshkov Zhekov), an alternative font set | SIL OFL 1.1 | `assets/fonts/ter-u*.bdf`, `assets/fonts/Terminus-LICENSE.txt` |
 | JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; the Bluetooth libraries (`btctrler.a`, `btstack.a`, `wl_rf_common.a`, `crypto_toolbox_Osize.a`, `lib_ccm_aes.a`, binary only), three config sources and the headers are copied into `build/` and linked into the app; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
