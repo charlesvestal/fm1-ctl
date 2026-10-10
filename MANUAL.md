@@ -57,19 +57,23 @@ Each page has its own button, and that button lights while you're on the page.
 
 ## The screen
 
-The top line shows the page name and, on the right, the MIDI channel and the tempo. A dot beside the
-tempo flashes on each beat; it turns coral while playing. "EXT" replaces the tempo when the clock comes
-from outside. Small tags show the knob bank and "BLE" once Bluetooth is running. A small dot after the
-page name means there are unsaved changes.
+The top bar shows the page name on the left (on the Play page, with the knob bank's letter in a
+mustard chip), the MIDI channel in the middle, and the tempo with a play triangle on the right. The
+triangle is dark while playing and flashes vermilion on each beat. "EXT" replaces the tempo when the
+clock comes from outside. A "BLE" tag shows once Bluetooth is running, and a small dot at the far right
+means there are unsaved changes.
 
 Above the knobs, a status line on every page shows the lowest key's note, "ARP" or "LATCH" while the
 arpeggiator is on, "SUSTAIN" while ENV is held ("SUS LOCK" when locked), "MOD" while the mod wheel is up, and on the right the program (by name while the onboard
 sound is on).
 
-The bottom band shows what KNOB 1–4 do on the current page, with their values. The knob you turned
-last is shown in coral for a moment.
+The bottom band shows what KNOB 1–4 do on the current page: each knob's name, a dial (or, for a
+setting with a few positions, a row of pips) and its value. The knob you turned last is shown in
+vermilion for a moment. On the rule above them, a tag says what the knobs edit ("BANK A", "KEYS",
+"TRACK 2"…), with dots for the four banks on the Play page and the four tracks on the Sequencer page.
+A line at the very bottom says what the page's buttons and keys do.
 
-Messages, such as "KNOB BANK B" or "SAVED", replace the top line for about a second.
+Messages, such as "KNOB BANK B" or "SAVED", fill the top bar for about a second.
 
 ## Playing
 
@@ -92,12 +96,12 @@ the octave before letting go.
   keyboard's channel and the sequencer's channel.
 
 The Play page shows the last message you sent, a picture of the keys, and the three ports. Each port
-has a teal light for MIDI coming in and, for USB and Bluetooth, a coral light for MIDI going out.
+has a mustard light for MIDI coming in and, for USB and Bluetooth, a vermilion light for MIDI going out.
 
 ## Knobs and banks
 
 On the Play page, KNOB 1–4 send controllers. There are four banks of four, so 16 controllers in all.
-Press FX to step through banks A, B, C and D; the bank letter shows at the top of the screen. Each
+Press FX to step through banks A, B, C and D; the bank letter shows at the top of the screen and on the tag above the knobs. Each
 knob remembers its value per bank, so a knob picks up where you left it when you switch back.
 
 | Bank | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |

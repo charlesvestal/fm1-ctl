@@ -35,6 +35,7 @@ static const char *const RATE_NAME[NRATE] = {"1/4", "1/8", "1/8T", "1/16", "1/16
 static const char *const CLOCK_NAME[NCLK] = {"Int", "Int, quiet", "Ext"};
 static const char *const GLOW_NAME[3] = {"Off", "Low", "High"};
 #include "gm_names.h"
+#include "dsp/fastmath.h"
 #define KEY0_NOTE 53                   /* chromatic: F3 is key 0 at octave 0 */
 #define SCALE0_NOTE 48                 /* a scale: its root from C3 at octave 0 */
 #define FLASH_MS 120u                  /* a port's light after a message */
@@ -43,20 +44,21 @@ static const char *const GLOW_NAME[3] = {"Off", "Low", "High"};
 static const uint8_t WHITE_K[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
 static const uint8_t BLACK_K[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
 
-/* the screen's colours (FoMni's): cream paper, warm brown ink, coral for what is played, teal for
- * controllers and connections */
-#define K_BG RGB(250, 244, 232)
-#define K_PANEL RGB(236, 228, 212)
-#define K_LINE RGB(216, 205, 186)
-#define K_DIM RGB(150, 136, 118)
-#define K_TEXT RGB(72, 58, 48)
+/* the screen's colours, paper and ink: warm white paper, ink-blue type, vermilion for what is played,
+ * mustard for controllers and connections (_T: their tints; K_COOL_D: mustard dark enough for type) */
+#define K_BG RGB(251, 248, 241)
+#define K_PANEL RGB(239, 233, 220)
+#define K_LINE RGB(221, 212, 194)
+#define K_DIM RGB(122, 128, 152)
+#define K_TEXT RGB(30, 43, 90)
 #define K_WHITE RGB(255, 255, 255)
-#define K_HOT RGB(242, 120, 72)
-#define K_HOT_T RGB(248, 208, 184)
-#define K_COOL RGB(38, 166, 154)
-#define K_COOL_T RGB(196, 230, 222)
-#define K_KEYW RGB(255, 252, 245)
-#define K_KEYB RGB(110, 94, 80)
+#define K_HOT RGB(229, 72, 46)
+#define K_HOT_T RGB(248, 211, 201)
+#define K_COOL RGB(217, 162, 27)
+#define K_COOL_T RGB(245, 228, 184)
+#define K_COOL_D RGB(158, 112, 6)
+#define K_KEYW RGB(255, 253, 248)
+#define K_KEYB RGB(30, 43, 90)
 
 enum { KM_NONE, KM_NOTES, KM_ARP };    /* what a held key did: sent notes, gave them to the arpeggiator */
 static struct {
@@ -706,14 +708,15 @@ static void input(void)
 }
 
 /* ------------------------------------------------------------- screen --- */
-/* four bands: the header (28 px), the page (124), the status line (20), the knobs (68) */
-#define HDR_H 28
-#define MAIN_Y 28
-#define MAIN_H 124
-#define STAT_Y 152
-#define STAT_H 20
-#define KNB_Y 172
-#define KNB_H 68
+/* four bands (X0X's top bar and knob row): the top bar (20 px), the page (120), the status line (18),
+ * the knob row (82: its tag on a rule, four knobs, the footer) */
+#define HDR_H 20
+#define MAIN_Y 20
+#define MAIN_H 120
+#define STAT_Y 140
+#define STAT_H 18
+#define KNB_Y 158
+#define KNB_H 82
 
 static uint32_t hash(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t hash_s(uint32_t h, const char *s)
@@ -744,21 +747,145 @@ static void text_c(int32_t cx, int32_t y, const felucca_font_t *f, const char *s
 {
     cv_text(cx - text_w(f, s) / 2, y, f, s, c);
 }
+static void text_r(int32_t rx, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
+{
+    cv_text(rx - text_w(f, s), y, f, s, c);
+}
+
+/* ---- from X0X: text centred on its capitals, and anti-aliased shapes (coverage 0..16, blended over
+ * what is there) */
+typedef struct { const felucca_font_t *f; int8_t top, bot; } capm_t;
+static capm_t capm[6];
+static const capm_t *caps(const felucca_font_t *f)   /* the first and last rows of 'H', measured once */
+{
+    int i;
+    for (i = 0; i < 6 && capm[i].f; i++)
+        if (capm[i].f == f)
+            return &capm[i];
+    if (i == 6)
+        i = 5;
+    {
+        uint32_t gi = ((uint32_t)'H' <= f->last ? 'H' : '0') - f->first, w = f->bw[gi], bpr = (w + 1u) / 2u, x, y;
+        const uint8_t *gd = f->data + f->off[gi];
+        int top = -1, bot = 0;
+        for (y = 0; y < f->h; y++)
+            for (x = 0; x < w; x++) {
+                uint32_t a = gd[y * bpr + x / 2u];
+                a = (x & 1u) ? (a & 15u) : (a >> 4);
+                if (a >= 8u) {
+                    if (top < 0)
+                        top = (int)y;
+                    bot = (int)y;
+                }
+            }
+        capm[i].f = f;
+        capm[i].top = (int8_t)(top < 0 ? 0 : top);
+        capm[i].bot = (int8_t)bot;
+    }
+    return &capm[i];
+}
+static int32_t vc(const felucca_font_t *f, int32_t y0, int32_t h)   /* the y that centres f's capitals in [y0, y0+h) */
+{
+    const capm_t *m = caps(f);
+    return y0 + (h - (m->bot - m->top + 1) + 1) / 2 - m->top;
+}
+static void px_blend(int32_t x, int32_t y, uint16_t c, uint32_t a)
+{
+    uint16_t *q;
+    uint32_t bg;
+    y += cv_oy;
+    if ((uint32_t)x >= cv_w || y < cv_y0 || y >= cv_y1 || !a)
+        return;
+    q = &cv_px[(uint32_t)y * cv_w + (uint32_t)x];
+    if (a >= 16u) {
+        *q = swap16(c);
+        return;
+    }
+    bg = swap16(*q);
+    *q = swap16((uint32_t)(((((c >> 11) * a + (bg >> 11) * (16u - a)) >> 4) << 11) |
+                           (((((c >> 5) & 63u) * a + ((bg >> 5) & 63u) * (16u - a)) >> 4) << 5) |
+                           (((c & 31u) * a + (bg & 31u) * (16u - a)) >> 4)));
+}
+static void disc(float cx, float cy, float r, uint16_t c)
+{
+    int32_t x0 = (int32_t)fm_floorf(cx - r - 1.0f), x1 = (int32_t)(cx + r + 1.0f);
+    int32_t y0 = (int32_t)fm_floorf(cy - r - 1.0f), y1 = (int32_t)(cy + r + 1.0f), x, y;
+    for (y = y0; y <= y1; y++)
+        for (x = x0; x <= x1; x++) {
+            float dx = (float)x + 0.5f - cx, dy = (float)y + 0.5f - cy, d = fm_sqrtf(dx * dx + dy * dy);
+            px_blend(x, y, c, (uint32_t)(fm_clampf(r - d + 0.5f, 0.0f, 1.0f) * 16.0f + 0.5f));
+        }
+}
+static void dot(int32_t x, int32_t y, int32_t r, uint16_t c) { disc((float)x + 0.5f, (float)y + 0.5f, (float)r + 0.3f, c); }
+static float turns(float y, float x)              /* atan2 in turns, 0..1 from +x clockwise (y down) */
+{
+    float ax = fm_fabsf(x), ay = fm_fabsf(y), a = ax < ay ? ax / (ay + 1e-9f) : ay / (ax + 1e-9f), q = a * a, r;
+    r = ((-0.0464964749f * q + 0.15931422f) * q - 0.327622764f) * q * a + a;
+    if (ay > ax)
+        r = 1.57079637f - r;
+    if (x < 0.0f)
+        r = FM_PI - r;
+    if (y < 0.0f)
+        r = FM_TWO_PI - r;
+    return r * (1.0f / FM_TWO_PI);
+}
+/* a knob: a 270-degree track from 7:30 to 4:30, the value filled from the start, round ends and a handle */
+static void arc(int32_t cx, int32_t cy, int32_t r, float v, uint16_t track, uint16_t fill)
+{
+    const float th = 3.4f, a0 = 0.375f, sweep = 0.75f;
+    float ro = (float)r, ri = ro - th, rm = ro - th * 0.5f, fx = (float)cx + 0.5f, fy = (float)cy + 0.5f;
+    int32_t x, y;
+    v = fm_clampf(v, 0.0f, 1.0f);
+    for (y = -r - 1; y <= r + 1; y++)
+        for (x = -r - 1; x <= r + 1; x++) {
+            float dx = (float)x, dy = (float)y, d = fm_sqrtf(dx * dx + dy * dy), t, a;
+            a = fm_clampf(ro + 0.5f - d, 0.0f, 1.0f) * fm_clampf(d - ri + 0.5f, 0.0f, 1.0f);
+            if (a <= 0.0f)
+                continue;
+            t = turns(dy, dx) - a0;
+            if (t < 0.0f)
+                t += 1.0f;
+            t /= sweep;
+            if (t > 1.0f)
+                continue;
+            px_blend(cx + x, cy + y, t <= v ? fill : track, (uint32_t)(a * 16.0f + 0.5f));
+        }
+    {
+        float e0 = a0 * FM_TWO_PI, e1 = (a0 + sweep) * FM_TWO_PI, ev = (a0 + sweep * v) * FM_TWO_PI;
+        disc(fx + fm_cosf(e0) * rm - 0.5f, fy + fm_sinf(e0) * rm - 0.5f, th * 0.5f, v > 0.0f ? fill : track);
+        disc(fx + fm_cosf(e1) * rm - 0.5f, fy + fm_sinf(e1) * rm - 0.5f, th * 0.5f, v >= 1.0f ? fill : track);
+        disc(fx + fm_cosf(ev) * rm - 0.5f, fy + fm_sinf(ev) * rm - 0.5f, th * 0.5f + 1.3f, K_TEXT);
+        disc(fx + fm_cosf(ev) * rm - 0.5f, fy + fm_sinf(ev) * rm - 0.5f, th * 0.5f + 0.6f, K_WHITE);
+    }
+}
+static void play_icon(int32_t x, int32_t y, uint16_t c)   /* a triangle 9 x 11, edges anti-aliased */
+{
+    int32_t i, j;
+    for (j = 0; j < 11; j++)
+        for (i = 0; i < 9; i++) {
+            float fy = (float)j + 0.5f - 5.5f, fx = (float)i + 0.5f, edge = 8.0f - fx - fm_fabsf(fy) * 1.3f;
+            float a = fm_clampf(edge * 0.7f + 0.5f, 0.0f, 1.0f) * fm_clampf(fx + 0.5f, 0.0f, 1.0f);
+            px_blend(x + i, y + j, c, (uint32_t)(a * 16.0f + 0.5f));
+        }
+}
 
 static int32_t tag(int32_t x, int32_t y, const char *s, uint16_t bg, uint16_t fg)   /* a little label */
 {
     int32_t w = text_w(&FONT_XS, s) + 10;
-    cv_round(x, y, w, 16, 6, bg);
-    cv_text(x + 5, y + 1, &FONT_XS, s, fg);
+    cv_round(x, y, w, 16, 4, bg);
+    cv_text(x + 5, vc(&FONT_XS, y, 16), &FONT_XS, s, fg);
     return w;
 }
 
 static int lit(const uint32_t *t, int p) { return plat_ms() - t[p] < FLASH_MS && t[p]; }
 
+/* the top bar (X0X's): the page's name, on Play the knob bank in a chip; the channel in the middle;
+ * Bluetooth, the tempo and the play triangle on the right, a dot while unsaved. A message takes the bar. */
 static void draw_header(void)
 {
     char t[24];
     int msg = plat_ms() < ui.msg_until, bs = plat_ble_state(), bc = plat_ble_connected(), beat = eng_beat_on();
+    int32_t x;
     uint32_t h = hash(hash(hash(2166136261u, ui.view), (uint32_t)msg | ui.dirty << 1 | (uint32_t)bs << 2 |
                                                            (uint32_t)bc << 4 | ui.playing << 5 | proj.arp_on << 6 |
                                                            (uint32_t)beat << 7 | proj.bank << 8),
@@ -771,37 +898,40 @@ static void draw_header(void)
         return;
     ui.sig[0] = h;
     cv_begin(240, HDR_H, K_BG);
-    if (msg) {
-        int32_t x = cv_text(10, 6, &FONT_B, ui.msg[0], K_TEXT);
-        cv_text(x + 8, 6, &FONT_B, ui.msg[1], K_HOT);
-    } else {
-        int32_t x = cv_text(10, 6, &FONT_B, VIEW_NAME[ui.view], K_TEXT) + 6;
-        if (ui.view == V_PLAY) {
-            char b[2] = {(char)('A' + proj.bank), 0};
-            x += tag(x, 6, b, K_COOL_T, K_COOL) + 4;
-        }
-        if (ui.dirty)
-            cv_round(x + 2, 12, 5, 5, 2, K_DIM);
-        x = 232;                         /* right: channel, tempo with the beat, Bluetooth */
-        put_u(put_s(t, "CH"), proj.chan + 1u);
-        x -= text_w(&FONT_S, t);
-        cv_text(x, 6, &FONT_S, t, K_TEXT);
-        if (proj.clock == CLK_EXT)
-            put_s(t, "EXT");
-        else
-            put_u(t, proj.tempo);
-        x -= text_w(&FONT_S, t) + 8;
-        cv_text(x, 6, &FONT_S, t, ui.playing ? K_TEXT : K_DIM);
-        x -= 12;
-        cv_round(x, 10, 8, 8, 4, beat ? (ui.playing ? K_HOT : K_LINE) : K_PANEL);
-        if (bs != BLE_OFF) {
-            uint16_t c = bc ? K_COOL : bs == BLE_FAILED ? K_HOT : bs == BLE_READY ? K_COOL_T :
-                         (ui.frame / 8u) & 1u ? K_COOL : K_COOL_T;
-            int32_t w = text_w(&FONT_XS, "BLE") + 10;
-            x -= w + 6;
-            cv_round(x, 6, w, 16, 6, c);
-            cv_text(x + 5, 7, &FONT_XS, "BLE", bc ? K_WHITE : K_TEXT);
-        }
+    cv_rect(0, HDR_H - 1, 240, 1, K_LINE);
+    if (msg) {                                   /* what a button just did: the whole bar */
+        int32_t w = text_w(&FONT_B, ui.msg[0]) + 8 + text_w(&FONT_B, ui.msg[1]);
+        cv_round(0, 0, 240, HDR_H - 1, 4, K_HOT);
+        x = cv_text(120 - w / 2, vc(&FONT_B, 0, HDR_H - 1), &FONT_B, ui.msg[0], K_WHITE);
+        cv_text(x + 8, vc(&FONT_B, 0, HDR_H - 1), &FONT_B, ui.msg[1], K_WHITE);
+        cv_blit(0, 0);
+        return;
+    }
+    x = cv_text(4, vc(&FONT_B, 1, 17), &FONT_B, VIEW_NAME[ui.view], K_TEXT) + 6;
+    if (ui.view == V_PLAY) {                     /* the knob bank, in a chip */
+        char b[2] = {(char)('A' + proj.bank), 0};
+        int32_t w = text_w(&FONT_B, b) + 10;
+        cv_round(x, 1, w, 17, 4, K_COOL);
+        cv_text(x + 5, vc(&FONT_B, 1, 17), &FONT_B, b, K_TEXT);
+    }
+    put_u(put_s(t, "CH "), proj.chan + 1u);
+    text_c(132, vc(&FONT_B, 1, 17), &FONT_B, t, K_TEXT);
+    if (proj.clock == CLK_EXT)
+        put_s(t, "EXT");
+    else
+        put_u(t, proj.tempo);
+    x = 212 - text_w(&FONT_S, t);
+    cv_text(x, vc(&FONT_S, 1, 17), &FONT_S, t, proj.clock == CLK_EXT ? K_COOL_D : ui.playing ? K_TEXT : K_DIM);
+    play_icon(217, 4, ui.playing ? (beat ? K_HOT : K_TEXT) : K_LINE);
+    if (ui.dirty)
+        dot(233, 9, 1, K_DIM);
+    if (bs != BLE_OFF) {                         /* Bluetooth: connected, waiting, starting (blinks), failed */
+        uint16_t c = bc ? K_COOL : bs == BLE_FAILED ? K_HOT_T : bs == BLE_READY ? K_COOL_T :
+                     (ui.frame / 8u) & 1u ? K_COOL : K_COOL_T;
+        int32_t w = text_w(&FONT_XS, "BLE") + 8;
+        x -= w + 6;
+        cv_round(x, 3, w, 14, 4, c);
+        cv_text(x + 4, vc(&FONT_XS, 3, 14), &FONT_XS, "BLE", bs == BLE_FAILED ? K_HOT : K_TEXT);
     }
     cv_blit(0, 0);
 }
@@ -858,7 +988,7 @@ static void draw_ports(int32_t y0)
             int s = plat_ble_state();
             st = plat_ble_connected() ? "connected" : s == BLE_READY ? "waiting" : s == BLE_STARTING ? "starting" :
                  s == BLE_FAILED ? "failed" : "off";
-            sc = plat_ble_connected() ? K_COOL : K_DIM;
+            sc = plat_ble_connected() ? K_COOL_D : K_DIM;
         } else {
             st = p == PORT_TRS ? "in only" : "";
         }
@@ -893,7 +1023,7 @@ static void draw_scale(void)
             b = put_s(b, " ");
         b = put_s(b, NOTE_NAME[(proj.root + SCALE_IV[proj.scale][i]) % 12]);
     }
-    cv_text(12, 22, &FONT_S, t, K_COOL);
+    cv_text(12, 22, &FONT_S, t, K_COOL_D);
     cv_text(12, 42, &FONT_XS, "White keys: the scale. Black keys: its chords.", K_DIM);
     draw_keys(70, 46);
 }
@@ -974,14 +1104,14 @@ static void draw_setup(void)                     /* the settings below; Bluetoot
     const char *st;
     if (!CT_BLE) {
         cv_text(10, 2, &FONT_S, "USB MIDI, TRS MIDI in", K_TEXT);
-        cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_LINE);
+        cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_DIM);
         return;
     }
     st = plat_ble_connected() ? "connected" : s == BLE_READY ? "advertising" :
          s == BLE_STARTING ? "starting" : s == BLE_FAILED ? "failed" : "off";
     put_s(put_s(t, "Bluetooth "), st);
-    cv_text(10, 2, &FONT_S, t, plat_ble_connected() ? K_COOL : K_TEXT);
-    cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_LINE);
+    cv_text(10, 2, &FONT_S, t, plat_ble_connected() ? K_COOL_D : K_TEXT);
+    cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_DIM);
     if (s == BLE_OFF) {
         cv_text(10, 20, &FONT_XS, "Off after a crash: KNOB 4 starts it", K_DIM);
     } else {
@@ -993,7 +1123,7 @@ static void draw_setup(void)                     /* the settings below; Bluetoot
     if (n > 7)                           /* the whole crash note */
         n = 7;
     for (i = 0; i < n; i++)
-        cv_text(8, 36 + (6 - (n - 1 - i)) * 12, &FONT_XS, plat_ble_log_line(n - 1 - i), K_DIM);
+        cv_text(8, 32 + (6 - (n - 1 - i)) * 12, &FONT_XS, plat_ble_log_line(n - 1 - i), K_DIM);
 }
 
 static void draw_sound(void)                     /* the onboard GM synth: what it plays, and its load */
@@ -1075,61 +1205,122 @@ static void draw_status(void)
         return;
     ui.sig[3] = h;
     cv_begin(240, STAT_H, K_BG);
-    cv_rect(8, 0, 224, 1, K_LINE);
     put_note(put_s(t, "Lowest "), proj.scale ? SCALE0_NOTE + proj.root + 12 * proj.octave : KEY0_NOTE + 12 * proj.octave);
-    x = cv_text(8, 3, &FONT_XS, t, K_DIM) + 8;
+    x = cv_text(4, vc(&FONT_XS, 0, 15), &FONT_XS, t, K_DIM) + 8;
     if (proj.arp_on)
-        x += tag(x, 2, proj.arp_latch ? "LATCH" : "ARP", K_HOT_T, K_HOT) + 4;
+        x += tag(x, 0, proj.arp_latch ? "LATCH" : "ARP", K_HOT_T, K_HOT) + 4;
     if (ui.sustain)
-        x += tag(x, 2, ui.sus_lock ? "SUS LOCK" : "SUSTAIN", K_HOT_T, K_HOT) + 4;
+        x += tag(x, 0, ui.sus_lock ? "SUS LOCK" : "SUSTAIN", K_HOT_T, K_HOT) + 4;
     if (eng_mod_val())
-        tag(x, 2, "MOD", K_HOT_T, K_HOT);
+        tag(x, 0, "MOD", K_HOT_T, K_HOT);
     prog_name(t, proj.program);
-    cv_text(232 - text_w(&FONT_XS, t), 3, &FONT_XS, t, K_TEXT);
+    text_r(236, vc(&FONT_XS, 0, 15), &FONT_XS, t, K_TEXT);
     cv_blit(0, STAT_Y);
+}
+
+/* the knob row (X0X's): on a rule, a tag naming what the knobs edit, and dots for the page's sets (Play:
+ * the four banks; Sequencer: the four tracks); four knobs, each an arc (a switch: a pip per position) with
+ * its value; under them, the footer: what the page's buttons and keys do */
+static void knob_tag(char *t, int *dots, int *cur)
+{
+    static const char *const T[NVIEWS] = {"BANK", "KEYS", "ARP", "TRACK", "SOUND", "SETUP"};
+    char *b = put_s(t, T[ui.view]);
+    *dots = 0;
+    if (ui.view == V_PLAY) {
+        b[0] = ' ';
+        b[1] = (char)('A' + proj.bank);
+        b[2] = 0;
+        if (fx_cc())
+            put_s(b + 2, ": CC NUMBERS");
+        *dots = NBANKS;
+        *cur = proj.bank;
+    } else if (ui.view == V_SEQ) {
+        put_u(put_s(b, " "), ui.track + 1u);
+        *dots = NTRACKS;
+        *cur = ui.track;
+    }
+}
+static void footer_text(const char **a, const char **b, const char **c)
+{
+    *a = *b = *c = 0;
+    switch (ui.view) {
+    case V_PLAY: *a = "FX: BANK"; *b = "HOLD FX: SET CC"; *c = "ENV X2: SUS LOCK"; break;
+    case V_SCALE:
+        if (proj.scale) {
+            *a = "WHITE: THE SCALE";
+            *b = "BLACK: ITS CHORDS";
+        } else {
+            *a = "KNOB 2: A SCALE";
+        }
+        break;
+    case V_ARP: *a = "HOLD NOTES OR A CHORD"; *b = "KNOB 1: OFF, ON, LATCH"; break;
+    case V_SEQ: *a = "WHITE: STEPS"; *b = "BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
+    case V_SOUND: *a = "PRESETS: THE SOUND"; *b = "MASTER: VOLUME"; break;
+    default: *a = "SAVE: NOW"; *b = "OCT- + OCT+ 5 s: UPDATE MODE"; break;
+    }
+}
+static int knob_switch(int k)                    /* a few named positions: pips, not an arc */
+{
+    return k == K_ARP || k == K_CLOCK || k == K_GLOW || k == K_SOUND || k == K_SNDIN || k == K_BT || k == K_AOCT;
 }
 
 static void draw_knobs(void)
 {
     uint32_t h = hash(2166136261u, ui.view | (uint32_t)ui.touched << 8 | proj.bank << 16 | ui.track << 20 |
                                        (uint32_t)fx_cc() << 24), i;
-    int now_touch = plat_ms() < ui.touch_until;
+    int now_touch = plat_ms() < ui.touch_until, dots, cur = 0;
+    char t[32];
     for (i = 0; i < 4; i++)
         h = hash(hash(h, (uint32_t)knob_get(view_knob((int)i))), proj.cc[proj.bank][i]);
-    h = hash(hash(h, (uint32_t)now_touch), (uint32_t)plat_ble_state());
+    h = hash(hash(h, (uint32_t)now_touch), (uint32_t)plat_ble_state() | proj.scale << 4);
     if (h == ui.sig[2])
         return;
     ui.sig[2] = h;
     cv_begin(240, KNB_H, K_BG);
-    cv_round(4, 2, 232, KNB_H - 6, 6, K_PANEL);
+    {   /* the rule; at its right end the tag, then the dots */
+        int32_t xd, xt;
+        knob_tag(t, &dots, &cur);
+        xd = 237 - dots * 5;
+        xt = xd - (dots ? 5 : 0) - text_w(&FONT_XS, t);
+        cv_rect(0, 5, xt - 5, 1, K_LINE);
+        cv_text(xt, vc(&FONT_XS, 0, 11), &FONT_XS, t, K_HOT);
+        for (i = 0; i < (uint32_t)dots; i++)
+            cv_rect(xd + (int32_t)i * 5, 4, 3, 3, (int)i == cur ? K_HOT : K_LINE);
+    }
+    {   /* the footer */
+        const char *a, *b, *c, *p[3];
+        int32_t x = 4;
+        footer_text(&a, &b, &c);
+        p[0] = a;
+        p[1] = b;
+        p[2] = c;
+        for (i = 0; i < 3 && p[i]; i++)
+            x = cv_text(x, vc(&FONT_T, 71, 9), &FONT_T, p[i], K_DIM) + 7;
+    }
     for (i = 0; i < 4; i++) {
         int k = view_knob((int)i), lo, hi, v;
-        int32_t x = (int32_t)i * 60, cx = x + 30, bw;
+        int32_t cx = (int32_t)i * 60 + 30;
         int hot = now_touch && ui.touched == (int)i;
-        char t[16];
         if (i)
-            cv_rect(x, 14, 1, KNB_H - 30, K_LINE);
+            cv_rect((int32_t)i * 60, 14, 1, 50, K_LINE);
         if (k == K_NONE)
             continue;
+        if (hot)
+            cv_round((int32_t)i * 60 + 2, 11, 56, 56, 6, K_PANEL);
         knob_range(k, &lo, &hi);
         v = knob_get(k);
         knob_name(k, t);
-        text_c(cx, 6, &FONT_XS, t, hot ? K_TEXT : K_DIM);
-        knob_text(k, t);
-        {   /* the value: big, unless it has lower case (the big face has none) or is long */
-            const char *q = t;
-            int lower = 0;
-            for (; *q; q++)
-                lower |= *q >= 'a' && *q <= 'z';
-            if (lower || text_w(&FONT_M, t) > 56)
-                text_c(cx, 26, text_w(&FONT_B, t) > 58 ? &FONT_XS : &FONT_B, t, hot ? K_HOT : K_TEXT);
-            else
-                text_c(cx, 22, &FONT_M, t, hot ? K_HOT : K_TEXT);
+        text_c(cx, vc(&FONT_XS, 13, 10), &FONT_XS, t, hot ? K_TEXT : K_DIM);
+        if (knob_switch(k)) {                    /* its positions as pips */
+            int n = hi - lo + 1, q, pw = 6, gap = 2, w0 = n * (pw + gap) - gap;
+            for (q = 0; q < n; q++)
+                cv_round(cx - w0 / 2 + q * (pw + gap), 33, pw, 9, 2, q == v - lo ? (hot ? K_HOT : K_COOL) : K_LINE);
+        } else {
+            arc(cx, 38, 12, hi > lo ? (float)(v - lo) / (float)(hi - lo) : 0.0f, K_LINE, hot ? K_HOT : K_COOL);
         }
-        bw = hi > lo ? (int32_t)(44 * (v - lo) / (hi - lo)) : 0;
-        cv_round(cx - 22, 50, 44, 6, 3, K_LINE);
-        if (bw)
-            cv_round(cx - 22, 50, bw < 6 ? 6 : bw, 6, 3, hot ? K_HOT : K_COOL);
+        knob_text(k, t);
+        text_c(cx, vc(text_w(&FONT_B, t) > 56 ? &FONT_XS : &FONT_B, 53, 13), text_w(&FONT_B, t) > 56 ? &FONT_XS : &FONT_B, t,
+               hot ? K_HOT : K_TEXT);
     }
     cv_blit(0, KNB_Y);
 }
