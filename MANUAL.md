@@ -28,7 +28,7 @@ plays through its speaker and headphone jack with nothing connected.
 | Keys | Play notes. Chromatic from F3, or a scale and its chords |
 | OCT− / OCT+ | Move the keys down or up an octave, from −3 to +3 |
 | KNOB 1–4 | The four values shown at the bottom of the screen |
-| SELECT | The pages, in the order of their buttons: Play, Keys, Arp, Sequencer, Sound, Setup |
+| SELECT | The current page's own pages: the knob banks on Play, the tracks on the Sequencer |
 | ALGORITHM | MIDI channel, 1 to 16 |
 | PRESETS | Program change, 1 to 128: picks the onboard sound too |
 | FX | Next knob bank, A to D. Hold it and turn KNOB 1–4 to set their controller numbers |
@@ -101,7 +101,7 @@ has a mustard light for MIDI coming in and, for USB and Bluetooth, a vermilion l
 ## Knobs and banks
 
 On the Play page, KNOB 1–4 send controllers. There are four banks of four, so 16 controllers in all.
-Press FX to step through banks A, B, C and D; the bank letter shows at the top of the screen and on the tag above the knobs. Each
+Press FX (or turn SELECT) to step through banks A, B, C and D; the bank letter shows at the top of the screen and on the tag above the knobs. Each
 knob remembers its value per bank, so a knob picks up where you left it when you switch back.
 
 | Bank | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
@@ -212,7 +212,7 @@ of different lengths drift against each other, which makes longer, shifting patt
 **Editing by hand:** on this page the keys edit instead of playing.
 
 - **White keys** turn the selected track's 16 steps on or off.
-- **Black keys 1–4** select a track.
+- **Black keys 1–4** select a track (or turn SELECT).
 - **Black keys 5–8** mute or unmute tracks 1–4.
 
 Turning Steps, Hits or Rotate rebuilds the pattern from those numbers, which replaces any steps you

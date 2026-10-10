@@ -14,17 +14,22 @@ expect_out USB B0 14 65
 tap SAVE
 expect dirty 0
 spin ALGO 3
-# the tempo: Setup, KNOB 1; SELECT turns the pages
+# the tempo: Setup, KNOB 1; SELECT: the banks on Play (stops at A and D), nothing on Setup
 tap EDIT
 spin K1 10
-tap HOME
-expect view 0
-spin SELECT -1
-wait 50
-expect view 5
 spin SELECT 1
 wait 50
+expect view 5
+tap HOME
 expect view 0
+spin SELECT 1
+wait 50
+expect bank 1
+spin SELECT -1
+wait 50
+spin SELECT -1
+wait 50
+expect bank 0
 wait 4500
 expect dirty 0
 leds

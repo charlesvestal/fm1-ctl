@@ -22,6 +22,13 @@ expect pat1 4112
 key 0 down
 key 0 up
 expect pat1 4113
+# SELECT: the next track and back
+spin SELECT 1
+wait 50
+expect track 2
+spin SELECT -1
+wait 50
+expect track 1
 # KNOB 2 regenerates it: 4 hits
 spin K2 2
 expect pat1 4369

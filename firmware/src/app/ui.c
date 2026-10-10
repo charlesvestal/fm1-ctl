@@ -4,7 +4,8 @@
  *
  *   keys          chromatic from F3; with a scale: white keys the scale's steps, black keys its chords
  *   KNOB 1-4      the page's four values (on Play: the knob bank's four controllers)
- *   SELECT the page  ALGORITHM MIDI channel  PRESETS program change  (the tempo: Setup, KNOB 1)
+ *   SELECT the page's pages (Play: the banks; Sequencer: the tracks)  ALGORITHM MIDI channel
+ *   PRESETS program change  (the tempo: Setup, KNOB 1)
  *   FX            the next knob bank (A..D); held on Play, KNOB 1-4 set the bank's controller numbers
  *   ARP           the Arp page (KNOB 1 there turns it on: Off / On / Latch)
  *   PLAY          start / stop (the sequencer, MIDI start / stop)    REC  panic (all notes off)
@@ -532,6 +533,15 @@ static void octave(int d)
 
 #define ENV_TAP_MS 300u                  /* ENV: two presses this close lock sustain */
 #define SAVE_HOLD_MS 1000u               /* SAVE held this long on Setup: Bluetooth by hand */
+static void bank_to(int b)                     /* the knob bank, with a word on the top bar */
+{
+    char t[2] = {(char)('A' + b), 0};
+    proj.bank = (uint8_t)b;
+    say("KNOB BANK", t);
+    ui.touched = -1;
+    mark_dirty();
+}
+
 static void button_down(int b)
 {
     switch (b) {
@@ -578,13 +588,8 @@ static void button_up(int b)
         break;
     case B_LFO: engine_mod(0); break;
     case B_FX:
-        if (!ui.fx_used) {
-            char t[2] = {0, 0};
-            proj.bank = (uint8_t)((proj.bank + 1u) % NBANKS);
-            t[0] = (char)('A' + proj.bank);
-            say("KNOB BANK", t);
-            mark_dirty();
-        }
+        if (!ui.fx_used)
+            bank_to((proj.bank + 1) % NBANKS);
         ui.touched = -1;
         break;
     case B_HOME: set_view(V_PLAY); break;
@@ -672,8 +677,15 @@ static void input(void)
         ui.act_t = plat_ms();
     midi_in();
     master_pot();
-    if ((e = plat_enc(EN_SELECT)) != 0)          /* the pages in their buttons' order, round */
-        set_view((int)(((int32_t)ui.view + e % NVIEWS + NVIEWS) % NVIEWS));
+    if ((e = plat_enc(EN_SELECT)) != 0) {        /* the page's pages, as X0X (the dots on the knob row) */
+        int d = e > 0 ? 1 : -1;
+        if (ui.view == V_PLAY && proj.bank + d >= 0 && proj.bank + d < NBANKS) {
+            bank_to(proj.bank + d);
+        } else if (ui.view == V_SEQ && ui.track + d >= 0 && ui.track + d < NTRACKS) {
+            ui.track = (uint8_t)(ui.track + d);
+            ui.touched = -1;
+        }
+    }
     if (CT_BLE && ui.view == V_SETUP && (btn >> B_SAVE & 1u) && !ui.save_long &&
         plat_ms() - ui.save_t >= SAVE_HOLD_MS) {  /* SAVE held on Setup: Bluetooth, off after a crash, by hand */
         ui.save_long = 1;
@@ -1254,7 +1266,7 @@ static void footer_text(const char **a, const char **b, const char **c)
 {
     *a = *b = *c = 0;
     switch (ui.view) {
-    case V_PLAY: *a = "FX: BANK"; *b = "HOLD FX: SET CC"; *c = "ENV X2: SUS LOCK"; break;
+    case V_PLAY: *a = "SELECT, FX: BANK"; *b = "HOLD FX: SET CC"; *c = "ENV X2: SUS LOCK"; break;
     case V_SCALE:
         if (proj.scale) {
             *a = "WHITE: THE SCALE";
@@ -1264,7 +1276,7 @@ static void footer_text(const char **a, const char **b, const char **c)
         }
         break;
     case V_ARP: *a = "HOLD NOTES OR A CHORD"; *b = "KNOB 1: OFF, ON, LATCH"; break;
-    case V_SEQ: *a = "WHITE: STEPS"; *b = "BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
+    case V_SEQ: *a = "WHITE: STEPS"; *b = "SELECT, BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
     case V_SOUND: *a = "PRESETS: THE SOUND"; *b = "MASTER: VOLUME"; break;
     default:
         *a = "SAVE: NOW";
