@@ -263,7 +263,7 @@ static void fm1_main(void)
     if (!ble_last_bad)
         ble_start();                                /* Bluetooth is on, as on the stock firmware */
     else
-        ui_say("BLUETOOTH OFF:", "IT CRASHED");     /* not twice in a row: KNOB 1 on its page starts it */
+        ui_say("BLUETOOTH OFF:", "IT CRASHED");     /* not twice in a row: SAVE held on Setup starts it */
 
     for (;;) {
         fm1_wdt_feed();

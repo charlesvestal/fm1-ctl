@@ -28,7 +28,7 @@ plays through its speaker and headphone jack with nothing connected.
 | Keys | Play notes. Chromatic from F3, or a scale and its chords |
 | OCT− / OCT+ | Move the keys down or up an octave, from −3 to +3 |
 | KNOB 1–4 | The four values shown at the bottom of the screen |
-| SELECT | Tempo, 40 to 240 BPM |
+| SELECT | The pages, in the order of their buttons: Play, Keys, Arp, Sequencer, Sound, Setup |
 | ALGORITHM | MIDI channel, 1 to 16 |
 | PRESETS | Program change, 1 to 128: picks the onboard sound too |
 | FX | Next knob bank, A to D. Hold it and turn KNOB 1–4 to set their controller numbers |
@@ -227,18 +227,18 @@ page, spread by Humanize.
 
 ## Clock and transport
 
-Ctl keeps a clock at 24 ticks per beat. The arpeggiator and sequencer run on it. Choose its source on
-the Setup page (KNOB 1):
+Ctl keeps a clock at 24 ticks per beat. The arpeggiator and sequencer run on it. Set the tempo (40 to 240 BPM) and
+choose the clock's source on the Setup page (KNOB 1 and KNOB 2):
 
 | Clock | What happens |
 | --- | --- |
-| Int | Ctl keeps time at the SELECT tempo and sends MIDI clock: over USB all the time, over Bluetooth while playing. The default |
+| Int | Ctl keeps time at the tempo (Setup, KNOB 1) and sends MIDI clock: over USB all the time, over Bluetooth while playing. The default |
 | Int, quiet | Ctl keeps time but sends no clock |
 | Ext | Ctl follows MIDI clock and start / stop from any input: USB, Bluetooth or the TRS jack |
 
 PLAY starts and stops the sequencer. With an internal clock it also sends MIDI start and stop, so a
 DAW or drum machine following the clock starts with it. With Ext, incoming start and stop drive the
-sequencer, SELECT does nothing, and the screen shows "EXT".
+sequencer, the Tempo knob does nothing, and the screen shows "EXT".
 
 ## Setup
 
@@ -246,14 +246,14 @@ Press EDIT for the Setup page.
 
 | Knob | Sets |
 | --- | --- |
-| KNOB 1 Clock | Int, Int quiet, Ext (see above) |
-| KNOB 2 Seq ch | The sequencer's MIDI channel, 1 to 16 |
-| KNOB 3 Glow | Off, Low or High: how brightly unlit buttons glow |
-| KNOB 4 Bluetooth | Shows whether it is on; starts it after a crash (see below) |
+| KNOB 1 Tempo | 40 to 240 BPM |
+| KNOB 2 Clock | Int, Int quiet, Ext (see above) |
+| KNOB 3 Seq ch | The sequencer's MIDI channel, 1 to 16 |
+| KNOB 4 Glow | Off, Low or High: how brightly unlit buttons glow |
 
 The page also shows Bluetooth's state and log, and the firmware version.
 
-The USB-only version of Ctl (`ctl-usb`) has no Bluetooth: KNOB 4 is empty here, the page shows only the
+The USB-only version of Ctl (`ctl-usb`) has no Bluetooth: the page shows only the
 firmware version, and the Play page shows only the USB and TRS ports.
 
 ## Bluetooth
@@ -271,8 +271,8 @@ unevenness, a few milliseconds to a few tens. Wi-Fi on 5 GHz and the FM-1 near t
 Nothing is queued while no device is connected, so notes played meanwhile are not sent later.
 
 The Setup page also shows the Bluetooth log, which survives a restart. If Bluetooth ever crashes the
-FM-1, the next start leaves Bluetooth off, says so, and the log shows a crash note; KNOB 4 on the Setup
-page then starts Bluetooth by hand.
+FM-1, the next start leaves Bluetooth off, says so, and the log shows a crash note; holding SAVE for a second on the
+Setup page then starts Bluetooth by hand.
 
 ## Saving
 

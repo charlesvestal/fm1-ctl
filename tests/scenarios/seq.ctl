@@ -39,7 +39,7 @@ shot seq.png
 leds
 # external clock: follows MIDI clock and start from the TRS jack
 tap EDIT
-spin K1 2
+spin K2 2
 out
 wait 300
 expect clocks_out 0

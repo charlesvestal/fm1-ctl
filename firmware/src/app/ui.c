@@ -4,7 +4,7 @@
  *
  *   keys          chromatic from F3; with a scale: white keys the scale's steps, black keys its chords
  *   KNOB 1-4      the page's four values (on Play: the knob bank's four controllers)
- *   SELECT tempo  ALGORITHM MIDI channel  PRESETS program change
+ *   SELECT the page  ALGORITHM MIDI channel  PRESETS program change  (the tempo: Setup, KNOB 1)
  *   FX            the next knob bank (A..D); held on Play, KNOB 1-4 set the bank's controller numbers
  *   ARP           the Arp page (KNOB 1 there turns it on: Off / On / Latch)
  *   PLAY          start / stop (the sequencer, MIDI start / stop)    REC  panic (all notes off)
@@ -72,6 +72,8 @@ static struct {
     uint8_t sustain;
     uint8_t sus_lock;                  /* ENV tapped twice: sustain stays on after the release */
     uint32_t env_t;                    /* when ENV last went down */
+    uint32_t save_t;                   /* when SAVE went down; save_long: held long enough (Setup: Bluetooth) */
+    uint8_t save_long;
     uint8_t fx_used;                   /* a knob turned while FX was held: no bank change at its release */
     uint32_t fx_t;                     /* when FX went down */
     uint8_t dirty;
@@ -298,14 +300,14 @@ static void midi_in(void)
 /* what a knob edits: one of these */
 enum { K_VAL0, K_VAL1, K_VAL2, K_VAL3, K_CC0, K_CC1, K_CC2, K_CC3, K_ROOT, K_SCALE, K_VEL, K_HUMAN,
        K_AMODE, K_ARATE, K_AOCT, K_ARP, K_STEPS, K_HITS, K_ROT, K_NOTE, K_CLOCK, K_SEQCH, K_MASTER, K_GLOW,
-       K_BT, K_SOUND, K_SNDIN, K_NONE };
+       K_TEMPO, K_SOUND, K_SNDIN, K_NONE };
 static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_VAL0, K_VAL1, K_VAL2, K_VAL3},
     {K_ROOT, K_SCALE, K_VEL, K_HUMAN},
     {K_ARP, K_AMODE, K_ARATE, K_AOCT},
     {K_STEPS, K_HITS, K_ROT, K_NOTE},
     {K_SOUND, K_SNDIN, K_MASTER, K_NONE},
-    {K_CLOCK, K_SEQCH, K_GLOW, CT_BLE ? K_BT : K_NONE},
+    {K_TEMPO, K_CLOCK, K_SEQCH, K_GLOW},
 };
 /* FX held on Play: the knobs set the bank's controller numbers, shown once it has been held a moment
  * (a tap to change banks does not flash them) or a knob turns */
@@ -347,7 +349,7 @@ static int knob_get(int k)
     case K_SEQCH: return proj.seq_ch;
     case K_MASTER: return proj.master_cc;
     case K_GLOW: return proj.glow;
-    case K_BT: return plat_ble_state() != BLE_OFF;
+    case K_TEMPO: return proj.tempo;
     case K_SOUND: return proj.sound != SOUND_OFF;
     case K_SNDIN: return !proj.in_mute;
     default: return 0;
@@ -364,7 +366,8 @@ static void knob_range(int k, int *lo, int *hi)
     case K_AMODE: *hi = NARP - 1; break;
     case K_ARATE: *hi = NRATE - 1; break;
     case K_AOCT: *lo = 1; *hi = 3; break;
-    case K_BT: case K_SOUND: case K_SNDIN: *hi = 1; break;
+    case K_SOUND: case K_SNDIN: *hi = 1; break;
+    case K_TEMPO: *lo = 40; *hi = 240; break;
     case K_ARP: *hi = 2; break;
     case K_STEPS: *lo = 1; *hi = 16; break;
     case K_HITS: *hi = trk()->steps; break;
@@ -380,7 +383,7 @@ static void knob_name(int k, char *b)
 {
     static const char *const N[] = {"Root", "Scale", "Velocity", "Humanize", "Mode", "Rate", "Octaves", "Arp",
                                     "Steps", "Hits", "Rotate", "Note", "Clock", "Seq ch", "MASTER", "Glow",
-                                    "Bluetooth", "Sound", "MIDI in"};
+                                    "Tempo", "Sound", "MIDI in"};
     if (k <= K_VAL3)
         put_u(put_s(b, "CC "), proj.cc[proj.bank][k - K_VAL0]);
     else if (k <= K_CC3)
@@ -411,11 +414,12 @@ static void knob_text(int k, char *b)
     case K_GLOW: put_s(b, GLOW_NAME[v]); break;
     case K_SOUND: put_s(b, v ? "On" : "Off"); break;
     case K_SNDIN: put_s(b, v ? "Plays" : "Ignored"); break;
-    case K_BT: {
-        static const char *const S[] = {"Off", "On", "On", "Failed"};
-        put_s(b, S[plat_ble_state() & 3]);
+    case K_TEMPO:
+        if (proj.clock == CLK_EXT)
+            put_s(b, "Ext");
+        else
+            put_u(b, (uint32_t)v);
         break;
-    }
     case K_CC0: case K_CC1: case K_CC2: case K_CC3: put_u(put_s(b, "#"), (uint32_t)v); break;
     default: put_u(b, (uint32_t)v); break;
     }
@@ -480,14 +484,11 @@ static void knob_set(int k, int v)
                 gm_panic();              /* notes from MIDI in may be sounding */
             proj.in_mute = (uint8_t)!v;
             break;
-        case K_BT:
-            if (v && plat_ble_state() == BLE_OFF) {
-                plat_ble_start();
-                say("BLUETOOTH", "STARTING");
-            } else if (!v) {
-                say("BLUETOOTH", "IS ALWAYS ON");
-            }
-            return;                      /* nothing saved: Bluetooth starts at every boot */
+        case K_TEMPO:
+            if (proj.clock == CLK_EXT)
+                return;                  /* following a clock from outside */
+            proj.tempo = (uint8_t)v;
+            break;
         default: return;
         }
     }
@@ -530,6 +531,7 @@ static void octave(int d)
 }
 
 #define ENV_TAP_MS 300u                  /* ENV: two presses this close lock sustain */
+#define SAVE_HOLD_MS 1000u               /* SAVE held this long on Setup: Bluetooth by hand */
 static void button_down(int b)
 {
     switch (b) {
@@ -592,6 +594,8 @@ static void button_up(int b)
     case B_GLO: set_view(V_SOUND); break;
     case B_EDIT: set_view(V_SETUP); break;
     case B_SAVE:
+        ui.save_t = plat_ms();
+        ui.save_long = 0;
         if (project_save() == 0) {
             ui.dirty = 0;
             say("SAVED", 0);
@@ -668,9 +672,15 @@ static void input(void)
         ui.act_t = plat_ms();
     midi_in();
     master_pot();
-    if ((e = plat_enc(EN_SELECT)) != 0 && proj.clock != CLK_EXT) {
-        proj.tempo = (uint8_t)clamp(proj.tempo + accel(EN_SELECT, e, 200), 40, 240);
-        mark_dirty();
+    if ((e = plat_enc(EN_SELECT)) != 0)          /* the pages in their buttons' order, round */
+        set_view((int)(((int32_t)ui.view + e % NVIEWS + NVIEWS) % NVIEWS));
+    if (CT_BLE && ui.view == V_SETUP && (btn >> B_SAVE & 1u) && !ui.save_long &&
+        plat_ms() - ui.save_t >= SAVE_HOLD_MS) {  /* SAVE held on Setup: Bluetooth, off after a crash, by hand */
+        ui.save_long = 1;
+        if (plat_ble_state() == BLE_OFF) {
+            plat_ble_start();
+            say("BLUETOOTH", "STARTING");
+        }
     }
     if ((e = plat_enc(EN_ALGO)) != 0) {
         int c = clamp(proj.chan + e, 0, 15);
@@ -1113,7 +1123,7 @@ static void draw_setup(void)                     /* the settings below; Bluetoot
     cv_text(10, 2, &FONT_S, t, plat_ble_connected() ? K_COOL_D : K_TEXT);
     cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_DIM);
     if (s == BLE_OFF) {
-        cv_text(10, 20, &FONT_XS, "Off after a crash: KNOB 4 starts it", K_DIM);
+        cv_text(10, 20, &FONT_XS, "Off after a crash: hold SAVE to start it", K_DIM);
     } else {
         char *b = put_u(put_s(t, "Name FM-1   in "), ui.n_in[PORT_BLE]);
         put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);
@@ -1256,12 +1266,15 @@ static void footer_text(const char **a, const char **b, const char **c)
     case V_ARP: *a = "HOLD NOTES OR A CHORD"; *b = "KNOB 1: OFF, ON, LATCH"; break;
     case V_SEQ: *a = "WHITE: STEPS"; *b = "BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
     case V_SOUND: *a = "PRESETS: THE SOUND"; *b = "MASTER: VOLUME"; break;
-    default: *a = "SAVE: NOW"; *b = "OCT- + OCT+ 5 s: UPDATE MODE"; break;
+    default:
+        *a = "SAVE: NOW";
+        *b = CT_BLE && plat_ble_state() == BLE_OFF ? "HOLD SAVE: BLUETOOTH" : "OCT- + OCT+ 5 S: UPDATE";
+        break;
     }
 }
 static int knob_switch(int k)                    /* a few named positions: pips, not an arc */
 {
-    return k == K_ARP || k == K_CLOCK || k == K_GLOW || k == K_SOUND || k == K_SNDIN || k == K_BT || k == K_AOCT;
+    return k == K_ARP || k == K_CLOCK || k == K_GLOW || k == K_SOUND || k == K_SNDIN || k == K_AOCT;
 }
 
 static void draw_knobs(void)

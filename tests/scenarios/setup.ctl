@@ -14,13 +14,23 @@ expect_out USB B0 14 65
 tap SAVE
 expect dirty 0
 spin ALGO 3
-spin SELECT 10
+# the tempo: Setup, KNOB 1; SELECT turns the pages
+tap EDIT
+spin K1 10
+tap HOME
+expect view 0
+spin SELECT -1
+wait 50
+expect view 5
+spin SELECT 1
+wait 50
+expect view 0
 wait 4500
 expect dirty 0
 leds
 tap EDIT
 expect view 5
-spin K3 -2
+spin K4 -2
 wait 50
 shot setup.png
 leds
