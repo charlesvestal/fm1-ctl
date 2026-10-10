@@ -1124,16 +1124,24 @@ static void draw_setup(void)                     /* the settings below; Bluetoot
     char t[40];
     int s = plat_ble_state(), i, n;
     const char *st;
-    if (!CT_BLE) {
-        cv_text(10, 2, &FONT_S, "USB MIDI, TRS MIDI in", K_TEXT);
-        cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_DIM);
+    if (!CT_BLE) {                               /* the USB-only build: what its ports have carried */
+        char *b;
+        cv_text(10, 2, &FONT_S, "MIDI", K_TEXT);
+        cv_text(236 - text_w(&FONT_XS, "CTL-1 " CT_VERSION), 4, &FONT_XS, "CTL-1 " CT_VERSION, K_DIM);
+        b = put_u(put_s(t, "USB   in "), ui.n_in[PORT_USB]);
+        put_u(put_s(b, "   out "), ui.n_out[PORT_USB]);
+        cv_text(10, 24, &FONT_XS, t, K_DIM);
+        put_u(put_s(t, "TRS   in "), ui.n_in[PORT_TRS]);
+        cv_text(10, 40, &FONT_XS, t, K_DIM);
+        cv_text(10, 72, &FONT_XS, "Settings save by themselves; SAVE: now.", K_DIM);
+        cv_text(10, 88, &FONT_XS, "OCT- and OCT+ held 5 s: update mode.", K_DIM);
         return;
     }
     st = plat_ble_connected() ? "connected" : s == BLE_READY ? "advertising" :
          s == BLE_STARTING ? "starting" : s == BLE_FAILED ? "failed" : "off";
     put_s(put_s(t, "Bluetooth "), st);
     cv_text(10, 2, &FONT_S, t, plat_ble_connected() ? K_COOL_D : K_TEXT);
-    cv_text(236 - text_w(&FONT_XS, "Ctl " CT_VERSION), 4, &FONT_XS, "Ctl " CT_VERSION, K_DIM);
+    cv_text(236 - text_w(&FONT_XS, "CTL-1 " CT_VERSION), 4, &FONT_XS, "CTL-1 " CT_VERSION, K_DIM);
     if (s == BLE_OFF) {
         cv_text(10, 20, &FONT_XS, "Off after a crash: hold SAVE to start it", K_DIM);
     } else {
@@ -1163,7 +1171,7 @@ static void draw_sound(void)                     /* the onboard GM synth: what i
     else
         put_u(put_s(t, "GM program "), p + 1u);
     cv_text(12, 22, &FONT_XS, t, K_DIM);
-    cv_text(12, 46, &FONT_XS, proj.in_mute ? "Plays Ctl's notes (not MIDI in)" : "Plays Ctl's notes and MIDI in", K_DIM);
+    cv_text(12, 46, &FONT_XS, proj.in_mute ? "Plays the keys (not MIDI in)" : "Plays the keys and MIDI in", K_DIM);
     cv_text(12, 64, &FONT_XS, "PRESETS picks the sound.", K_DIM);
     put_s(put_u(put_s(put_u(put_s(t, "Voices "), gm_voices), "    CPU "), plat_cpu_pct()), "%");
     cv_text(12, 90, &FONT_XS, t, K_DIM);
@@ -1196,6 +1204,7 @@ static void draw_main(void)
                  plat_cpu_pct());
     if (ui.view == V_SETUP) {
         h = hash(hash(h, plat_ble_log_total()), ui.n_in[PORT_BLE] ^ ui.n_out[PORT_BLE] << 16);
+        h = hash(hash(h, ui.n_in[PORT_USB] ^ ui.n_out[PORT_USB] << 16), ui.n_in[PORT_TRS]);
         for (i = 0; i < 7; i++)
             h = hash_s(h, plat_ble_log_line(i));
     }

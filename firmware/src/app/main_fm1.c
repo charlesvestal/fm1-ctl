@@ -113,7 +113,7 @@ static void fm1_fault(const fm1_crash_t *c)
     char b[12];
     uint32_t t0;
     lcd_fill(0, 0, 240, 240, RGB(160, 0, 0));
-    draw_text_box(0, 8, 240, &FONT_S, "Ctl CRASH", C_WHITE, 1);
+    draw_text_box(0, 8, 240, &FONT_S, "CTL-1 CRASH", C_WHITE, 1);
     hexs(b, c->vec);
     draw_text_box(10, 40, 220, &FONT_S, b, C_WHITE, 0);
     hexs(b, c->pc);
@@ -149,7 +149,7 @@ static void safe_main(void)
     char b[24];
     uint32_t t0, play;
     lcd_fill(0, 0, 240, 240, C_BLACK);
-    draw_text_box(0, 18, 240, &FONT_B, "Ctl SAFE MODE", C_HI, 1);
+    draw_text_box(0, 18, 240, &FONT_B, "CTL-1 SAFE MODE", C_HI, 1);
     draw_text_box(0, 52, 240, &FONT_S, "IT CRASHED TWICE", C_WHITE, 1);
     draw_text_box(0, 72, 240, &FONT_S, "WHILE STARTING.", C_WHITE, 1);
     draw_text_box(0, 102, 240, &FONT_S, "USB IS ON:", C_WHITE, 1);
@@ -197,13 +197,14 @@ static void safe_main(void)
 
 static void splash(void)
 {
-    lcd_fill(0, 0, 240, 240, RGB(250, 244, 232));
-    cv_begin(240, 64, RGB(250, 244, 232));
+    lcd_fill(0, 0, 240, 240, RGB(251, 248, 241));     /* ui.c's paper and ink */
+    cv_begin(240, 64, RGB(251, 248, 241));
     {
-        int32_t w = text_w(&FONT_L, "Ctl");
-        cv_text((240 - w) / 2, 0, &FONT_L, "Ctl", RGB(38, 166, 154));
+        int32_t w = text_w(&FONT_L, "CTL-1");
+        cv_text((240 - w) / 2, 0, &FONT_L, "CTL-1", RGB(30, 43, 90));
+        cv_rect((240 - w) / 2, 37, w, 2, RGB(229, 72, 46));
         w = text_w(&FONT_S, "A MIDI controller for the FM-1");
-        cv_text((240 - w) / 2, 42, &FONT_S, "A MIDI controller for the FM-1", RGB(150, 136, 118));
+        cv_text((240 - w) / 2, 44, &FONT_S, "A MIDI controller for the FM-1", RGB(122, 128, 152));
     }
     cv_blit(0, 92);
     lcd_sync();

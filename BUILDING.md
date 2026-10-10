@@ -95,5 +95,15 @@ mode. If the FM-1 no longer starts but reaches the chip's update mode (4C4A:8057
 
 ## Publishing
 
-With Bluetooth, not while the licence is open (README.md, LICENSING.md). The USB-only build
-(`./build.sh --no-ble --release X.Y`) can be released: `gh release create vX.Y build/ctl-usb-X.Y.fwsc`.
+Only the USB-only build is released (the Bluetooth build may not be distributed while its licence is
+open: README.md, LICENSING.md):
+
+```
+./build.sh --no-ble --release X.Y          # build/ctl-usb-X.Y.fwsc, identity FM-1_6XXYYZZ
+tools/gen_screens.sh                       # the manual's screenshots, if the screens changed
+tools/publish_pages.sh X.Y                 # the site (landing page, installer, manual, emulator) on gh-pages
+gh release create vX.Y build/ctl-usb-X.Y.fwsc --notes-file NOTES.md
+```
+
+The site is https://charlesvestal.github.io/fm1-ctl/ (`tools/make_pages.py`; the manual from
+`docs/MANUAL.md` by `tools/manual_html.py`, its panel drawing by `tools/gen_manual_figures.py`).

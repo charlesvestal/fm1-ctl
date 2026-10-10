@@ -307,10 +307,12 @@ static void run_ms(uint32_t ms)
         now_ms++;
         ble_tick();
         engine_tick();                     /* the device's 1 kHz tick */
+#ifndef CT_WEB                             /* (the browser renders it for its audio: web/emu/ctl_web.c) */
         if (now_ms % 6u == 0u) {           /* the synth, about as often as the device's audio halves */
             static int32_t blk[256 * 2];
             gm_render(blk, 256, 4096);
         }
+#endif
         if (now_ms >= ui_due) {
             ui_due = now_ms + 16;
             ui_frame();

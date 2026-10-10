@@ -3,17 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ctl in the browser</title>
-<meta name="description" content="Ctl, a MIDI controller firmware for the M-VAVE FM-1, in your browser: the same code the FM-1 runs, sending to your MIDI ports.">
+<title>CTL-1 in the browser</title>
+<meta name="description" content="CTL-1, a MIDI controller firmware for the M-VAVE FM-1, in your browser: the same code the FM-1 runs, sending to your MIDI ports.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
 <style>
-:root { --ground: #faf4e8; --ink: #48392f; --muted: #8a7764; --rule: #e6dccb; --accent: #e0683a; --teal: #26a69a; --card: #fffaf1; color-scheme: light; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --ground: #1c1814; --ink: #f2e8d8; --muted: #b3a28e; --rule: #3a322a; --accent: #f28a5a; --teal: #4cc3b6; --card: #26201b; color-scheme: dark; }
-}
-:root[data-theme="dark"] { --ground: #1c1814; --ink: #f2e8d8; --muted: #b3a28e; --rule: #3a322a; --accent: #f28a5a; --teal: #4cc3b6; --card: #26201b; color-scheme: dark; }
+:root { --ground: #fbf8f1; --ink: #1e2b5a; --muted: #5d6585; --rule: #ddd4c2; --accent: #e5482e; --cool: #d9a21b; --card: #efe9dc; color-scheme: light; }
+/* CTL-1's paper and ink, as the site and its screen; the FM-1 itself stays black */
 body { background: var(--ground); color: var(--ink); margin: 0; padding-inline: 16px; padding-block: 28px 48px;
        font: 400 16px/1.55 "Barlow", "Helvetica Neue", Arial, sans-serif; }
 main { max-width: 1040px; margin: 0 auto; }
@@ -21,7 +18,8 @@ header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1.2re
 h1 { font: 700 2rem/1.1 "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0; }
 header p { margin: 0; color: var(--muted); }
 header nav { margin-left: auto; display: flex; gap: 1rem; }
-a { color: var(--accent); }
+header nav a[aria-current] { text-decoration: none; color: var(--accent); }
+a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .device { position: relative; width: 100%; aspect-ratio: 1000 / 640; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 .device svg { pointer-events: none; }
 .hit { position: absolute; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 12px; }
@@ -43,8 +41,8 @@ a { color: var(--accent); }
 .lit .keyface.white { fill: #f6b48e; }
 .lit .keyface.black { fill: #4cc3b6; }
 .start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 11, 13, .55); border-radius: 4.4% / 6.9%; }
-.start button { font: 600 1.25rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .04em; padding: .7em 1.6em;
-                border-radius: 999px; border: 0; background: #f28a5a; color: #2a140a; cursor: pointer; }
+.start button { font: 700 1.25rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .04em; padding: .7em 1.6em;
+                border-radius: 8px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
 .start[hidden] { display: none; }
 .turn { display: none; margin: 0 0 .8rem; color: var(--muted); font-size: .92rem; }
 @media (orientation: portrait) and (max-width: 700px) { .turn { display: block; } }
@@ -63,8 +61,9 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 <body>
 <main>
 <header>
-  <h1>Ctl</h1>
+  <h1><a href="../" style="color:inherit;text-decoration:none" title="CTL-1 home">CTL-1</a></h1>
   <p>a MIDI controller for the FM-1, in the browser: the same code the FM-1 runs</p>
+  <nav><a href="../emu/" aria-current="page">Emulator</a><a href="../install/">Install</a><a href="../manual/">Manual</a><a href="https://github.com/charlesvestal/fm1-ctl">Source</a></nav>
 </header>
 
 <p class="turn">Turn your phone sideways for bigger controls.</p>
@@ -86,33 +85,32 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
   <div>
     <h2>Playing</h2>
     <ul>
-      <li><b>Keys</b> play notes, F3 to G5. <b>OCT−</b> / <b>OCT+</b> move them an octave. <b>ENV</b> held: sustain.</li>
-      <li><b>KNOB 1–4</b> send four controllers; <b>FX</b> steps through four banks of them (A to D).</li>
-      <li><b>SELECT</b> tempo, <b>ALGORITHM</b> MIDI channel, <b>PRESETS</b> program change. <b>REC</b> sends all notes off.</li>
-      <li><b>MASTER</b> can send a controller too (Setup, KNOB 3).</li>
+      <li><b>Keys</b> play notes, F3 to G5, and the FM-1's own General MIDI sounds play them. <b>OCT−</b> / <b>OCT+</b>: an octave.</li>
+      <li><b>ENV</b> held: sustain; tap it twice to lock it. <b>LFO</b> held: the mod wheel. <b>REC</b>: all notes off.</li>
+      <li><b>ALGORITHM</b> MIDI channel, <b>PRESETS</b> program change (the sound follows), <b>MASTER</b> volume.</li>
     </ul>
   </div>
   <div>
-    <h2>Scale and arpeggiator</h2>
+    <h2>Pages</h2>
     <ul>
-      <li><b>SEL</b>: the Scale page. With a scale, the white keys play its steps and the black keys its chords.</li>
-      <li><b>ARP</b> turns the arpeggiator on: hold notes or chords. <b>LFO</b>: its page (mode, rate, octaves, latch).</li>
+      <li>A button each: <b>HOME</b> Play, <b>SEL</b> Keys, <b>ARP</b> Arp, <b>SEQ</b> Sequencer, <b>GLO</b> Sound, <b>EDIT</b> Setup (tempo).</li>
+      <li><b>KNOB 1–4</b> set the four values at the bottom of the screen; on Play, four controllers in four banks.</li>
+      <li><b>SELECT</b> and <b>FX</b> step through the banks; hold <b>FX</b> to set their controller numbers.</li>
     </ul>
   </div>
   <div>
-    <h2>Sequencer</h2>
+    <h2>Scales, arpeggiator, sequencer</h2>
     <ul>
-      <li><b>SEQ</b>: four drum tracks on channel 10. KNOB 1–4: steps, hits, rotation, note (the hits spread evenly).</li>
-      <li>On this page the white keys toggle the selected track's steps; black keys 1–4 pick a track, 5–8 mute one.</li>
-      <li><b>PLAY</b> starts and stops it, and sends MIDI start / stop and clock (Setup: the clock source).</li>
+      <li><b>Keys</b> page, KNOB 2: a scale. Then the white keys play its notes and the black keys its chords.</li>
+      <li><b>Arp</b> page, KNOB 1: Off, On, Latch; hold notes or a chord.</li>
+      <li><b>Sequencer</b>: four Euclidean drum tracks. The white keys toggle steps, black keys 1–4 pick a track (or SELECT), 5–8 mute. <b>PLAY</b> starts it.</li>
     </ul>
   </div>
   <div>
     <h2>MIDI</h2>
     <ul>
       <li>Pick a <b>MIDI out</b> port to play a synth or your DAW from this page (Chrome and Edge have Web MIDI).</li>
-      <li>A <b>MIDI in</b> port arrives as the FM-1's USB: it is passed on to Bluetooth and lights the keys.</li>
-      <li>Bluetooth here is a stand-in: it starts, but nothing can connect to a web page.</li>
+      <li>A <b>MIDI in</b> port arrives as the FM-1's USB: it plays the sounds, lights the keys, and can be the clock (Setup: Ext).</li>
     </ul>
   </div>
   <div>
@@ -120,7 +118,7 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
     <ul>
       <li>Drag a knob up or down, or scroll over it. <kbd>Shift</kbd>-click a button to hold it.</li>
       <li>Notes like a piano: <kbd>A</kbd> is the lowest key, <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … up to <kbd>'</kbd>.</li>
-      <li><kbd>Z</kbd> / <kbd>X</kbd> octave, <kbd>Shift</kbd> sustain, <kbd>1</kbd> ARP, <kbd>2</kbd> FX, <kbd>Space</kbd> PLAY, <kbd>Backspace</kbd> REC, <kbd>Esc</kbd> HOME, <kbd>↑</kbd> <kbd>↓</kbd> tempo.</li>
+      <li><kbd>Z</kbd> / <kbd>X</kbd> octave, <kbd>Shift</kbd> sustain, <kbd>1</kbd> ARP, <kbd>2</kbd> FX, <kbd>Space</kbd> PLAY, <kbd>Backspace</kbd> REC, <kbd>Esc</kbd> HOME, <kbd>↑</kbd> <kbd>↓</kbd> SELECT.</li>
     </ul>
   </div>
 </section>
@@ -222,10 +220,11 @@ function hit(c, cls) {
   c.hit = d;
 }
 // what each control does, on hover (the Buttons list below says the same)
-const TIP = { FX: "Next knob bank (A to D)", SEL: "Scale page", ENV: "Hold: sustain", LFO: "Arpeggiator page", EDIT: "Next page",
-  GLO: "Knobs, then Setup, then Bluetooth", HOME: "Play page", SAVE: "Save", ARP: "Arpeggiator on / off", SEQ: "Sequencer page",
-  PLAY: "Start / stop", REC: "All notes off", "OCT-": "Keys an octave down", "OCT+": "Keys an octave up", SELECT: "Tempo",
-  ALGORITHM: "MIDI channel", PRESETS: "Program change", MASTER: "A controller, if Setup gives it one",
+const TIP = { FX: "Next knob bank (A to D); hold: set their controller numbers", SEL: "Keys page (scale)", ENV: "Hold: sustain; tap twice: lock it",
+  LFO: "Hold: mod wheel", EDIT: "Setup page (tempo, clock)", GLO: "Sound page", HOME: "Play page", SAVE: "Save now", ARP: "Arp page",
+  SEQ: "Sequencer page", PLAY: "Start / stop", REC: "All notes off", "OCT-": "Keys an octave down", "OCT+": "Keys an octave up",
+  SELECT: "The page's pages: banks on Play, tracks on the Sequencer", ALGORITHM: "MIDI channel", PRESETS: "Program change (the sound follows)",
+  MASTER: "Volume, or a controller (Sound page)",
   KNOB1: "The page's first value", KNOB2: "The page's second value", KNOB3: "The page's third value", KNOB4: "The page's fourth value" };
 for (const [n, c] of [...Object.entries(buttons), ...Object.entries(knobs)]) if (TIP[n]) c.g.setAttribute("aria-description", TIP[n]);
 for (const k of Object.values(knobs)) hit(k, "knob");
@@ -233,7 +232,7 @@ for (const b of Object.values(buttons)) hit(b);
 keys.forEach((k) => hit(k));
 
 // ---------------------------------------------------------------- state and input
-let node = null, btnMask = 0, keyMask = 0, latched = 0, master = 0;
+let node = null, btnMask = 0, keyMask = 0, latched = 0, master = 3072;   // MASTER three-quarters up: sound at once
 const btnHeldBy = new Map(), keyHeldBy = new Map();      // pointer / key id -> bit
 function send(m) { if (node) node.port.postMessage(m); }
 function syncButtons() {
@@ -329,6 +328,9 @@ for (const k of Object.values(knobs)) {
   });
 }
 
+knobs.MASTER.angle = -135 + 270 * master / 4096;             // drawn where it starts
+drawKnob(knobs.MASTER);
+
 const KEYMAP = {};
 // a piano on the computer keyboard, from the lowest key (F): white keys on the home row, black above
 ["KeyA", "KeyW", "KeyS", "KeyE", "KeyD", "KeyR", "KeyF", "KeyG", "KeyY", "KeyH", "KeyU", "KeyJ", "KeyK", "KeyO", "KeyL", "KeyP",
@@ -418,7 +420,7 @@ async function switchOn() {
           if (m.fb) drawScreen(m.fb);
           drawLights(m.buttons, m.keys, m.dimButtons, m.dimKeys);
           window.ctlLast = m;
-          if (m.load !== undefined) cpu.textContent = `Ctl uses ${m.load}% of this computer's time`;
+          if (m.load !== undefined) cpu.textContent = `CTL-1 uses ${m.load}% of this computer's time`;
           if (m.store) saveStore(m.store);
         } else if (m.type === "midi") midiOut(m.pkts);
       };

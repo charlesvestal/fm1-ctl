@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Ctl in an AudioWorklet: ctl.wasm is the whole FM-1 app (web/emu/ctl_web.c). It makes no sound;
-// each render quantum runs the device's clock forward by its length. Between quanta the page's input
+// CTL-1 in an AudioWorklet: ctl.wasm is the whole FM-1 app (web/emu/ctl_web.c). Each render quantum runs
+// the device's clock forward by its length and plays the synth's sound for it. Between quanta the page's input
 // and MIDI go in; the MIDI sent goes out at once, and about 30 times a second the screen, the lights
 // and any saved objects.
 
@@ -94,6 +94,8 @@ class Ctl extends AudioWorkletProcessor {
     const n = out[0].length;
     const t0 = clock();
     this.ex.web_render(n);
+    out[0].set(new Float32Array(this.mem.buffer, this.ex.web_out_l(), n));
+    if (out[1]) out[1].set(new Float32Array(this.mem.buffer, this.ex.web_out_r(), n));
     this.busy += clock() - t0;
     this.frames += n;
     const no = this.ex.web_out_n();

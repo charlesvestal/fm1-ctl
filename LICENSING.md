@@ -1,10 +1,11 @@
-# Ctl licensing
+# CTL-1 licensing
 
-Ctl's own code is free software under the GNU General Public License, version 3 only
+CTL-1 (Ctl in the code) is free software. Its own code is under the GNU General Public License, version 3 only
 (`GPL-3.0-only`, full text in `LICENSE`). It is built on Felucca's platform layer (through X0X and
 FoMni) and keeps Felucca's licence.
 
-**The source can be shared; the built firmware cannot (yet).** The firmware links JieLi's
+**The released firmware is the USB-only build** (below). **The Bluetooth build's source can be shared;
+the built firmware cannot (yet).** It links JieLi's
 Bluetooth libraries, which are Apache-2.0 but binary only. A GPLv3 binary that contains them cannot
 come with its complete corresponding source, so nobody may distribute a built Ctl (`ctl.bin`,
 `ctl.fwsc`, or any build of it), you or anyone who builds it. The source in this repository may be
@@ -26,7 +27,7 @@ out; it contains no JieLi code and may be shared as it is.
 
 | What | Origin | Licence |
 | --- | --- | --- |
-| Platform: `firmware/hal/`, `firmware/loader/`, `firmware/src/{libc,lcd,gfx,usb,storage,ota,midi_uart}.c`, `tools/` (build, package, install, rescue), `web/fm1*.js` | [Felucca](https://github.com/hugelton/Felucca), Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, as changed for [X0X](https://github.com/charlesvestal/fm1-x0x) and FoMni | GPL-3.0-only |
+| Platform: `firmware/hal/`, `firmware/loader/`, `firmware/src/{libc,lcd,gfx,usb,storage,ota,midi_uart}.c`, `tools/` (build, package, install, rescue), `web/fm1*.js`, `web/make_site.py`, `web/ctl_installer.html` (Felucca's installer page, by way of X0X and AMB-1) | [Felucca](https://github.com/hugelton/Felucca), Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, as changed for [X0X](https://github.com/charlesvestal/fm1-x0x) and FoMni | GPL-3.0-only |
 | `firmware/src/app/{panel,plat_fm1,main_fm1}.c`, `host/ctl_host.c`, `web/emu/` | adapted from FoMni and X0X (themselves from Felucca's `panel.c`, `main.c`, `audio.c`) | GPL-3.0-only |
 | `ble/shim/`, `ble/midi/le_midi.c`, `firmware/src/app/ble.c` | fm1-ble (the Bluetooth experiment this firmware grew from) | GPL-3.0-only, with the JieLi parts below |
 | Parts of `ble/midi/le_midi.c` (from the SDK's `apps/common/ble/le_trans_data.c`, changed), `ble/shim/rf_const.c` (values from `apps/common/net/wifi_conf.c`), and the interface details repeated in `ble/shim/shim.h` and `ble/shim/misc.c` (each file's header says which) | [JieLi AC79 SDK](https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK), Copyright (c) JIELI (Zhuhai Jieli Technology Co., Ltd.) | Apache-2.0 (`LICENSES/Apache-2.0.txt`) |
