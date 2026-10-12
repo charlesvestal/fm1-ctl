@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only OR MPL-2.0 */
 /* Cooperative context switch for the BT shim (pi32v2). A C call may clobber r0-r3; r4-r15 and
  * rets are the callee's to keep, so a switch saves exactly those on the old stack.
  *

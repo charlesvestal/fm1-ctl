@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only OR MPL-2.0 */
 /* Bluetooth MIDI: JieLi's BT stack (btctrler.a, btstack.a, wl_rf_common.a: Apache-2.0, binary only;
  * the source may be shared, built firmware not until the licence is settled) on the shim in
  * ../../ble/shim. Started at every boot, as the stock firmware does, unless the last Bluetooth run

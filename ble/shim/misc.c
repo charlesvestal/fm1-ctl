@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-only AND Apache-2.0
+/* SPDX-License-Identifier: (GPL-3.0-only OR MPL-2.0) AND Apache-2.0
  * A few interface details repeat the JieLi AC79 SDK, Copyright (c) JIELI (Zhuhai Jieli Technology Co.,
  * Ltd.), under the Apache License 2.0 (LICENSES/Apache-2.0.txt): the cbuffer_t layout
  * (include_lib/system/generic/circular_buf.h), the syscfg ids (include_lib/utils/syscfg/syscfg_id.h)

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only OR MPL-2.0 */
 /* sys_timer (periodic) and sys_timeout (one-shot), include_lib/system/timer.h, on the firmware's
  * millisecond clock. Run from the main loop (shim_timers), or, for the *_add_to_task kind, posted
  * to that task as [Q_CALLBACK, fn, priv] (os_taskq_pend runs it there). */

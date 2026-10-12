@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only OR MPL-2.0 */
 /* JieLi's OS API (include_lib/system/os/os_api.h), the part the BT libraries call, on a small
  * cooperative scheduler. Task 0 is the firmware's main loop; task_create() adds the BT tasks
  * (btctrler, btstack, btencry), each with its own stack and message queue. A task runs until it
