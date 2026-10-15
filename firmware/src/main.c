@@ -8,6 +8,15 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+/* the keys' velocity and aftertouch (MONK-1's, from Velo): the scan samples the analog rows (plat_fm1.c) */
+#define FM1_INPUT_ANALOG(c, r, v, d) plat_analog_sample(c, r, v, d)
+#define FM1_INPUT_DRIVE(c, r) plat_analog_drive(c, r)
+#define FM1_INPUT_PROBE(c, r, v, p) plat_probe_sample(c, r, v, p)
+#define FM1_INPUT_LED_OK(c, r) plat_analog_led_ok(c, r)
+static void plat_analog_sample(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven);
+static int plat_analog_drive(uint32_t col, uint32_t rowbit);
+static void plat_probe_sample(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t pressed);
+static int plat_analog_led_ok(uint32_t col, uint32_t rowbit);
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"
@@ -115,6 +124,17 @@ static void ota_commit(const uint8_t *parm)
 }
 
 #include "app/app.h"
+#define ANN_NAME "CTL-1 " CT_VERSION
+#define ANN_DATA __attribute__((section(".pool")))
+#include "ann_words.h"            /* the link to CTL-1's words file (tools/gen_words.py, from firmware/words.tsv) */
+#include "announce.c"             /* the screen as text for a screen reader (fm1-reader), over USB only */
+static int ann_wire_send(const uint8_t *p, uint32_t n)   /* never waits: no room (nobody reading), not sent */
+{
+    if (!usb.config || usb.suspended || SXQ - (so_w - so_r) < (n + 2u) / 3u)
+        return -1;
+    return ota_wire_send(p, n);
+}
+#include "app/sense.c"
 #include "app/panel.c"
 #include "app/plat_fm1.c"
 #include "app/project.c"

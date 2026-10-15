@@ -24,6 +24,7 @@ CSS = """
 :root {
   --paper: #fbf8f1; --sheet: #efe9dc; --rule: #ddd4c2; --ink: #1e2b5a; --muted: #5d6585;
   --hot: #e5482e; --hot-t: #f8d3c9; --cool: #d9a21b; --cool-t: #f5e4b8;
+  --hot-ink: #c23a22;                                 /* the vermilion as text: 4.5:1 on the paper */
   color-scheme: light;
 }
 body {
@@ -32,6 +33,8 @@ body {
   padding-inline: 16px; padding-block: 32px 64px;
 }
 main { max-width: 46rem; margin: 0 auto; }
+.page > .site { max-width: 46rem; margin-inline: auto; }
+main:focus { outline: none; }
 h1, h2, h3 { font-family: inherit; text-wrap: balance; line-height: 1.2; }
 h1 { font-size: 2.2rem; font-weight: 700; margin: 0 0 .4rem; letter-spacing: .02em; }
 h2 { font-size: 1.3rem; font-weight: 700; margin: 3rem 0 .8rem; padding-top: .8rem; border-top: 2px solid var(--ink); }
@@ -45,7 +48,9 @@ li::marker { color: var(--hot); }
 strong { font-weight: 700; }
 a { color: var(--ink); text-decoration-color: var(--hot); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 a:hover { background: var(--hot-t); }
-a:focus-visible { outline: 2px solid var(--hot); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--hot-ink); outline-offset: 2px; }
+.skip { position: absolute; left: 16px; top: -100px; background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 0 0 6px 6px; z-index: 1; }
+.skip:focus { top: 0; }
 code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .86em; }
 code { background: var(--sheet); padding: .08em .35em; border-radius: 3px; }
 pre { background: var(--sheet); border-radius: 6px; padding: 14px 16px; overflow-x: auto; line-height: 1.45; margin: 0 0 1.2rem; }
@@ -61,12 +66,12 @@ td:first-child { white-space: nowrap; }
 .status p { margin: 0; }
 .site { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1.2rem; margin: 0 0 1.6rem; padding-bottom: .5rem; border-bottom: 2px solid var(--ink); }
 .site .home { font-size: 1.1rem; font-weight: 700; letter-spacing: .04em; color: var(--ink); text-decoration: none; }
-.site .home:hover { color: var(--hot); background: none; }
+.site .home:hover { color: var(--hot-ink); background: none; }
 .site nav { margin-left: auto; display: flex; flex-wrap: wrap; gap: .2rem 1rem; font-size: .92rem; }
 .site nav a { color: var(--ink); text-underline-offset: 3px; }
-.site nav a[aria-current] { text-decoration: none; color: var(--hot); }
+.site nav a[aria-current] { text-decoration: none; color: var(--hot-ink); }
 a.home { color: inherit; text-decoration: none; }
-a.home:hover { background: none; color: var(--hot); }
+a.home:hover { background: none; color: var(--hot-ink); }
 main > a.home { display: inline-block; font-size: .9rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 .4rem; }
 .callout { border-left: 4px solid var(--cool); background: var(--cool-t); padding: 10px 16px; margin: 0 0 1.2rem; max-width: 65ch; border-radius: 0 6px 6px 0; }
 .callout p { margin: 0; }
@@ -110,7 +115,10 @@ IMG_BASE = SRC / "docs"
 EMBED = False                                         # --fragment: images as data URIs
 
 
-def figure(caption, src):
+def figure(alt, src, caption=None):
+    """![alt](src "caption"): the alt says what the picture shows (for a screen reader), the caption is the
+    visible line under it; without a caption, the alt is both."""
+    caption = caption or alt
     path = IMG_BASE / src
     if EMBED:
         mime = "image/svg+xml" if src.endswith(".svg") else "image/png"
@@ -118,13 +126,15 @@ def figure(caption, src):
     else:
         url = src
     cls = "wide" if src.endswith(".svg") else "shot"
-    return (f'<figure class="{cls}"><img src="{url}" alt="{html.escape(caption)}" loading="lazy">'
+    return (f'<figure class="{cls}"><img src="{url}" alt="{html.escape(alt)}" loading="lazy">'
             f"<figcaption>{inline(caption)}</figcaption></figure>")
 
 
 def convert(md):
     lines = md.splitlines()
     out, i, contents, sections = [], 0, None, {}
+    where = ""                                        # the section, to name a table or a command (each region its own name)
+    plain = lambda t: re.sub(r"[*`]|^\d+\. ", "", t).strip()
     for ln in lines:                                  # section numbers -> ids, for the contents
         m = re.match(r"## (\d+)\. (.+)", ln)
         if m:
@@ -135,16 +145,17 @@ def convert(md):
             j = i + 1
             while j < len(lines) and not lines[j].startswith("```"):
                 j += 1
-            out.append("<pre><code>" + html.escape("\n".join(lines[i + 1:j]), quote=False) + "</code></pre>")
+            label = html.escape(f"Command{': ' + where if where else ''}", quote=True)
+            out.append(f'<pre tabindex="0" role="region" aria-label="{label}"><code>' + html.escape("\n".join(lines[i + 1:j]), quote=False) + "</code></pre>")
             i = j + 1
             continue
         if ln.startswith("!["):                      # consecutive image lines: one row of figures
             figs = []
             while i < len(lines) and (lines[i].startswith("![") or (not lines[i].strip() and i + 1 < len(lines)
                                                                     and lines[i + 1].startswith("!["))):
-                m = re.match(r"!\[(.*)\]\((.*)\)", lines[i])
+                m = re.match(r'!\[(.*)\]\((\S+)(?:\s+"(.*)")?\)', lines[i])
                 if m:
-                    figs.append(figure(m.group(1), m.group(2)))
+                    figs.append(figure(m.group(1), m.group(2), m.group(3)))
                 i += 1
             out.append('<div class="figs">' + "".join(figs) + "</div>")
             continue
@@ -173,6 +184,7 @@ def convert(md):
                 out.append(f'<a class="home" href="../">{NAME}</a>\n<h1>{inline(t)}</h1>')
         elif ln.startswith("## "):
             t = ln[3:].strip()
+            where = plain(t)
             m = re.match(r"(\d+)\. (.+)", t)
             if t == "Contents":
                 contents = True
@@ -182,6 +194,7 @@ def convert(md):
             else:
                 out.append(f'<h2 id="{slug(t)}">{inline(t)}</h2>')
         elif ln.startswith("### "):
+            where = plain(ln[4:])
             out.append(f'<h3 id="{slug(ln[4:])}">{inline(ln[4:])}</h3>')
         elif ln.strip() == "---":
             if contents:
@@ -194,7 +207,8 @@ def convert(md):
                 rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")])
                 i += 1
             head, body = rows[0], [r for r in rows[1:] if not set("".join(r)) <= set("-: ")]
-            out.append('<div class="table"><table><thead><tr>' + "".join(f"<th>{inline(c)}</th>" for c in head) +
+            label = html.escape(f"Table{': ' + where if where else ''} ({', '.join(plain(c) for c in head)})", quote=True)
+            out.append(f'<div class="table" tabindex="0" role="region" aria-label="{label}"><table><thead><tr>' + "".join(f"<th>{inline(c)}</th>" for c in head) +
                        "</tr></thead><tbody>" + "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>"
                                                          for r in body) + "</tbody></table></div>")
             continue
@@ -239,16 +253,21 @@ def main():
     dst = Path(args[1]) if len(args) > 1 else SRC / "docs" / "manual.html"
     md = src.read_text()
     h1 = re.search(r"^# (.+)$", md, re.M)
-    title, what = (f"{NAME} Manual", "The manual") if not h1 or h1.group(1) == NAME else (f"{NAME}: {h1.group(1)}", h1.group(1))
+    title, what = (f"Manual · {NAME}", "The manual") if not h1 or h1.group(1) == NAME else (f"{NAME}: {h1.group(1)}", h1.group(1))
     body = convert(md)
     page = (f"<title>{html.escape(title)}</title>\n"
             f'<meta name="description" content="{html.escape(what)} for {NAME}, a MIDI controller firmware for the M-VAVE FM-1.">\n'
-            f"<style>{CSS}</style>\n<main>\n{body}\n</main>\n")
+            f"<style>{CSS}</style>\n<main id=\"content\" tabindex=\"-1\">\n{body}\n</main>\n")
     if not fragment:
-        head, _, rest = page.partition("<main>")
+        head, _, rest = page.partition('<main id="content" tabindex="-1">')
+        site = ""                                     # the site's header before <main>, a way past it first
+        m = re.match(r'\s*(<header class="site">.*?</header>)\n', rest)
+        if m:
+            site, rest = m.group(1) + "\n", rest[m.end():]
         page = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
                 '<meta name="viewport" content="width=device-width, initial-scale=1">\n' + head +
-                "</head>\n<body>\n<main>" + rest + "</body>\n</html>\n")
+                '</head>\n<body>\n<a class="skip" href="#content">Skip to content</a>\n<div class="page">\n' + site +
+                '<main id="content" tabindex="-1">' + rest.rstrip() + "\n</div>\n</body>\n</html>\n")
     dst.write_text(page)
     print(f"{dst}: {len(page)} bytes")
 

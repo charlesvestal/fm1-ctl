@@ -68,6 +68,61 @@ void plat_leds(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t d
     fm1_led_dim_div = DIV[glow < 0 || glow > 2 ? 0 : glow];
 }
 
+/* the keys' velocity and aftertouch (sense.c, MONK-1's): the scan tick samples the analog rows and calls
+ * these with each sample (main.c's FM1_INPUT_*). Off, the converter is the main loop's (MASTER). */
+static int plat_analog_led_ok(uint32_t col, uint32_t rowbit)   /* the key is open: its column's LEDs may light */
+{
+    int id = FM1_KEYMAP[rowbit][col];
+    uint32_t k = id >= 14 ? (uint32_t)id - 14u : 0xFFu;
+    return k >= NKEYS || sn_key[k].st == SN_OPEN;
+}
+static void plat_analog_sample(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven)
+{
+    int id = FM1_KEYMAP[rowbit][col];
+    if (id >= 14)
+        sense_sample((uint32_t)id - 14u, v, fm1_ticks(), (int)driven);
+}
+static int plat_analog_drive(uint32_t col, uint32_t rowbit)
+{
+    int id = FM1_KEYMAP[rowbit][col];
+    return id >= 14 && sense_want_drive((uint32_t)id - 14u);
+}
+static void plat_probe_sample(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t pressed)
+{
+    int id = FM1_KEYMAP[rowbit][col];
+    if (id >= 14)
+        sense_probe((uint32_t)id - 14u, v, pressed);
+}
+uint32_t plat_analog_mask(void)
+{
+    uint32_t m = 0, c, r;
+    for (c = 0; c < FM1_NCOL; c++)
+        for (r = 3; r <= 4u; r++)
+            if (FM1_KEYMAP[r][c] >= 14)
+                m |= 1u << (FM1_KEYMAP[r][c] - 14);
+    return m;
+}
+/* on: MONK-1's settings (divider 7, delay 2, DRIVE 2, the top row through the PA10 probe); off: the
+ * converter idle, MASTER read by the main loop again once the last conversion is taken */
+void plat_sense(int on)
+{
+    if (!on) {
+        fm1_an.con = 0;
+        fm1_an.drive = 0;
+        fm1_an.probe = 0;
+        return;
+    }
+    if (!fm1_an.con) {
+        int32_t a = fm1_adc_read(FM1_ADC_MASTER);  /* the pot's slot comes round in a frame: no dip meanwhile */
+        if (a >= 0)
+            fm1_an.master = (uint16_t)a;
+    }
+    fm1_an.immediate = 0;
+    fm1_an.drive = 2;
+    fm1_an.probe = 1;
+    fm1_an.con = (uint16_t)FM1_ADC_CON(7, 2);
+}
+
 static void ble_poll(void);
 void plat_yield(void) { ble_poll(); }          /* Bluetooth: its notifications go out while the screen draws */
 

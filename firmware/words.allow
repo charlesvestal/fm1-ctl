@@ -1,0 +1,25 @@
+# words CTL-1 says that the audit's dictionary lacks (fm1-reader tools/audit.mjs --allow): General MIDI's
+# instrument names, and the drum names
+synth
+oohs
+ahs
+charang
+shanai
+chiff
+kalimba
+shamisen
+agogo
+taiko
+shakuhachi
+clavinet
+woodblock
+polysynth
+goblins
+soundtrack
+maracas
+rimshot
+# real words the dictionary on this computer lacks
+lowest
+box
+honky-tonk
+bluetooth

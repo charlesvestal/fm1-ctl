@@ -14,6 +14,11 @@
  *   pages         one button each: HOME Play, SEL Keys, ARP Arp, SEQ Sequencer, GLO Sound, EDIT Setup
  *   SAVE          saves (it also saves by itself, a few seconds after a change)
  *
+ * Touch (SELECT on Setup): velocity and aftertouch from the keys themselves (MONK-1's sensing, from Velo:
+ * sense.c), each optional and off by default. On, the 20 keys on the matrix's analog rows (F3..C5) play
+ * when sense.c has their velocity (a few ms after the contact), the seven above them (the PA6 row, no
+ * converter) at the digital contact with the PA10 probe's velocity; aftertouch per note or the channel's.
+ *
  * On the Sequencer page the keys edit instead of playing: white keys the selected track's 16 steps,
  * black keys 1-4 select a track, 5-8 mute one.
  *
@@ -35,6 +40,7 @@ static const char *const ARP_NAME[NARP] = {"Up", "Down", "Up-down", "Random", "A
 static const char *const RATE_NAME[NRATE] = {"1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 static const char *const CLOCK_NAME[NCLK] = {"Int", "Int, quiet", "Ext"};
 static const char *const GLOW_NAME[3] = {"Off", "Low", "High"};
+static const char *const AT_NAME[NAT] = {"Off", "Poly", "Channel"};
 #include "gm_names.h"
 #include "dsp/fastmath.h"
 #define KEY0_NOTE 53                   /* chromatic: F3 is key 0 at octave 0 */
@@ -64,6 +70,8 @@ static const uint8_t BLACK_K[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
 enum { KM_NONE, KM_NOTES, KM_ARP };    /* what a held key did: sent notes, gave them to the arpeggiator */
 static struct {
     uint8_t view;
+    uint8_t setup_pg;                  /* Setup's pages (SELECT): 0 the settings, 1 Touch */
+    uint8_t last_vel;                  /* the last note's velocity from the keys (Touch shows it) */
     uint8_t track;                     /* the sequencer track the Sequencer page edits */
     uint32_t btn, keys;
     uint32_t enc_t[NE];
@@ -92,9 +100,47 @@ static struct {
     uint32_t sig[4];                   /* what each band shows: redrawn when it changes */
 } ui;
 
-static void say(const char *a, const char *b)
+/* the screen reader (announce.c; the "screen reader" section below): what the key handlers did, said at the
+ * next frame (text is built there, not in the handlers) */
+#ifdef CT_HOST
+#define SP_POOL
+#else
+#define SP_POOL __attribute__((section(".pool")))
+#endif
+enum { SE_NONE, SE_KEY, SE_STEP, SE_STEP_OUT, SE_MUTE, SE_PANIC };
+static struct {
+    uint32_t ctx;                      /* the page, hashed: a change is said */
+    int16_t val[4];                    /* the four knobs' values */
+    uint8_t chan, program, playing, sus_lock, ble, started;
+    uint32_t touch_until;              /* a knob turned (even when its value could not change) */
+    uint8_t ev, ev_n, ev_notes[3], ev_vel, ev_arg, ev_on;   /* the last key event: SE_* */
+} sp SP_POOL;
+static uint8_t sp_said;                /* a message went to the screen reader this frame: speak() leaves it be */
+static void sp_event(int ev, int arg, int on)
+{
+    sp.ev = (uint8_t)ev;
+    sp.ev_arg = (uint8_t)arg;
+    sp.ev_on = (uint8_t)on;
+}
+
+static void msg_text(const char *a, const char *b, char *t)   /* the message as a reader says it: "a b" */
+{
+    uint32_t i, k = 0;
+    for (i = 0; i < 23u && a && a[i]; i++)
+        t[k++] = a[i];
+    if (b && b[0])
+        t[k++] = ' ';
+    for (i = 0; i < 23u && b && b[i]; i++)
+        t[k++] = b[i];
+    while (k && t[k - 1] == '.')               /* "UPDATE MODE IN 3..": the dots are for the eye */
+        k--;
+    t[k] = 0;
+}
+/* a message on the top bar; flags: how a screen reader gets it (0: not at all, the page change says it) */
+static void say_as(const char *a, const char *b, uint32_t flags)
 {
     uint32_t i;
+    char t[48];
     for (i = 0; i < 23u && a && a[i]; i++)
         ui.msg[0][i] = a[i];
     ui.msg[0][i] = 0;
@@ -102,7 +148,15 @@ static void say(const char *a, const char *b)
         ui.msg[1][i] = b[i];
     ui.msg[1][i] = 0;
     ui.msg_until = plat_ms() + 1300u;
+    if (flags && ann_on()) {
+        msg_text(a, b, t);
+        ann_say(t, 0, flags);
+        sp_said = 1;
+    }
 }
+static void say(const char *a, const char *b) { say_as(a, b, ANN_NOW); }
+/* something did not happen: a screen reader says it whole (what follows does not cut it off) */
+static void warn(const char *a, const char *b) { say_as(a, b, ANN_NOW | ANN_KEEP); }
 void ui_say(const char *a, const char *b) { say(a, b); }
 int ui_dirty(void) { return ui.dirty != 0; }
 static void mark_dirty(void) { ui.dirty = 1; }
@@ -215,7 +269,7 @@ static int key_notes(int k, uint8_t *out)
     return n;
 }
 
-static void key_down(int k)
+static void key_down(int k, uint32_t vel)
 {
     uint8_t *q = ui.knotes[k];
     int n = key_notes(k, q), i;
@@ -228,11 +282,16 @@ static void key_down(int k)
         if (proj.arp_on)
             arp_press(q[i]);
         else
-            play(0x90u, q[i], proj.vel);
+            play(0x90u, q[i], vel);
     }
     b = put_note(put_s(ui.last, n > 1 ? "Chord " : "Note "), q[0]);
     if (!proj.arp_on)
-        put_u(put_s(b, "  "), proj.vel);
+        put_u(put_s(b, "  "), vel);
+    sp_event(SE_KEY, 0, 1);                      /* a screen reader: its note or chord */
+    sp.ev_n = (uint8_t)n;
+    for (i = 0; i < n; i++)
+        sp.ev_notes[i] = q[i];
+    sp.ev_vel = (uint8_t)vel;
 }
 
 static void key_up(int k)
@@ -297,11 +356,170 @@ static void midi_in(void)
     }
 }
 
+/* ------------------------------------------------------------ touch --- */
+/* velocity and aftertouch from the keys (MONK-1's sensing and its pressure(), sense.c). The scan samples
+ * the analog rows only while one of them is on. */
+static uint8_t touch_live;             /* the scan is sampling (plat_sense) */
+static int touch_wanted(void) { return proj.touch || proj.at_mode != AT_OFF; }
+
+/* the scale, tuned by playing (2026-10-15, on a debug page since removed): the analog keys' driven reading
+ * for 127 (DRIVE 2's own floor of 450 sat under the firm presses, ~547, so the hardest hit topped out near
+ * 95) and for 1, the curve's exponent x 100 at Curve 0; the top row's probe 0 / 43, its exponent 2.40 */
+#define TUNE_FIRM 530u
+#define TUNE_LIGHT 896u
+#define TUNE_CURVE 70.0f
+
+/* MONK-1's settings (as Velo measured best); the curve's exponent from Curve: x 2 at +5, / 2 at -5 */
+static void touch_config(void)
+{
+    sn_cfg.touch = 900;
+    sn_cfg.press = 400;
+    sn_cfg.release = 600;
+    sn_cfg.wait = 2;
+    sn_cfg.v_lo = 0;
+    sn_cfg.v_hi = 72;
+    sn_cfg.vmax = 127;
+    sn_cfg.at_range = 32;
+    sn_cfg.drive = 2;
+    sn_cfg.d_curve = (uint16_t)(TUNE_CURVE * fm_exp2f((float)proj.vel_curve * 0.2f) + 0.5f);
+    sn_cfg.d_ceil = TUNE_LIGHT;
+    sn_cfg.d_floor = TUNE_FIRM;
+    sn_cfg.d_at_range = 64;
+    sn_cfg.t_lo = 0;                         /* the top row's probe: */
+    sn_cfg.t_hi = 43;                        /* firm presses pile up at 43..45 */
+    sn_cfg.t_curve = 240;
+    sn_cfg.learn = 0;
+}
+
+/* the sampling on or off as Touch asks; the keys change hands (sense.c or the digital edge): all up */
+static void touch_apply(void)
+{
+    int want = touch_wanted();
+    touch_config();
+    if (want == touch_live)
+        return;
+    all_keys_up();
+    if (want) {
+        sense_init(plat_analog_mask());          /* fresh key states: nothing was sampled while off */
+        touch_config();
+        sense_cal_reset();
+    }
+    plat_sense(want);
+    touch_live = (uint8_t)want;
+}
+
+/* pressure, every 5 ms (MONK-1's, ui.c): counted from where the key rests, not from where it landed (a key
+ * goes on settling after the note), so the zero follows the driven reading down for P_SETTLE ms, then creeps
+ * after it, and comes back up at once when the key is eased. The lean is the pill's resistance below its
+ * rest on a log scale: P_DEAD of an octave is noise, P_SPAN more is 127. Smoothed over ~30 ms. */
+#define P_SETTLE 250u                  /* ms */
+#define P_DEAD 0.04f                   /* octaves of resistance */
+#define P_SPAN(s) (0.8f * (1.0f - 0.85f * (s)))   /* 0..1: 0.8 .. 0.12 octave */
+static float p_base[NKEYS], p_s[NKEYS];
+static uint32_t p_t0[NKEYS];
+static uint8_t at_sent[NKEYS], p_on[NKEYS], at_chan;
+static uint32_t at_t;
+
+static void at_off(void)               /* aftertouch back to 0 where it was sent */
+{
+    int k, i;
+    for (k = 0; k < NKEYS; k++) {
+        if (at_sent[k] && proj.at_mode == AT_POLY && ui.kmode[k] == KM_NOTES)
+            for (i = 0; i < ui.kn[k]; i++)
+                play(0xA0u, ui.knotes[k][i], 0);
+        at_sent[k] = 0;
+    }
+    if (at_chan)
+        play(0xD0u, 0, 0);
+    at_chan = 0;
+}
+
+static void pressure(void)
+{
+    uint32_t i, now = plat_ms();
+    float sens = 0.5f + (float)proj.at_sens * 0.09f;
+    uint8_t top = 0;
+    if (proj.at_mode == AT_OFF || now - at_t < 5u)
+        return;
+    at_t = now;
+    for (i = 0; i < NKEYS; i++) {
+        float d, lean, x;
+        uint8_t p;
+        int j;
+        if (!sense_is_analog(i))
+            continue;
+        if (sn_key[i].st != SN_DOWN || !sn_key[i].dn || ui.kmode[i] == KM_NONE) {
+            p_on[i] = 0;
+            p_s[i] = 0.0f;
+            at_sent[i] = 0;
+            continue;
+        }
+        d = (float)(sn_key[i].d > SN_DBASE + 1u ? sn_key[i].d - SN_DBASE : 1u);
+        if (!p_on[i]) {
+            p_on[i] = 1;
+            p_base[i] = d;
+            p_t0[i] = now;
+        }
+        if (d > p_base[i])
+            p_base[i] = d;                                     /* eased off: that is the rest now */
+        else
+            p_base[i] += (d - p_base[i]) * (now - p_t0[i] < P_SETTLE ? 0.25f : 0.0008f);
+        lean = fm_log2f(p_base[i] / d);
+        x = fm_clampf((lean - P_DEAD) / P_SPAN(sens), 0.0f, 1.0f);
+        p_s[i] += (x - p_s[i]) * 0.17f;
+        p = (uint8_t)(p_s[i] * 127.0f + 0.5f);
+        if (p > top)
+            top = p;
+        if (p != at_sent[i]) {
+            at_sent[i] = p;
+            if (proj.at_mode == AT_POLY && ui.kmode[i] == KM_NOTES)   /* the arpeggiator's notes: no poly AT */
+                for (j = 0; j < ui.kn[i]; j++)
+                    play(0xA0u, ui.knotes[i][j], p);
+        }
+    }
+    if ((proj.at_mode == AT_CHAN || proj.arp_on) && top != at_chan) {   /* the hardest-pressed key's */
+        at_chan = top;
+        play(0xD0u, top, 0);
+    }
+}
+
+/* the analog keys' notes, as sense.c finds them (off the Sequencer page: there the keys edit, at the contact) */
+static void touch_events(void)
+{
+    sense_ev_t e;
+    if (!touch_live)
+        return;
+    while (sense_take(&e)) {
+        if (ui.view == V_SEQ || e.key >= NKEYS)
+            continue;
+        if (e.type == EV_ON) {
+            uint32_t v = proj.touch ? e.vel : proj.vel;
+            ui.last_vel = e.vel;
+            key_up(e.key);                       /* a retrigger (the key bounced back open) */
+            key_down(e.key, v);
+        } else if (e.type == EV_OFF) {
+            key_up(e.key);
+        }
+    }
+    pressure();
+}
+
+/* a key without a converter (or every key, Touch off): the velocity at its contact */
+static uint32_t edge_vel(uint32_t k)
+{
+    uint32_t v;
+    if (touch_live && proj.touch && (v = sense_probe_velocity(k)) != 0) {
+        ui.last_vel = (uint8_t)v;
+        return v;
+    }
+    return proj.vel;
+}
+
 /* ------------------------------------------------------------ values --- */
 /* what a knob edits: one of these */
 enum { K_VAL0, K_VAL1, K_VAL2, K_VAL3, K_CC0, K_CC1, K_CC2, K_CC3, K_ROOT, K_SCALE, K_VEL, K_HUMAN,
        K_AMODE, K_ARATE, K_AOCT, K_ARP, K_STEPS, K_HITS, K_ROT, K_NOTE, K_CLOCK, K_SEQCH, K_MASTER, K_GLOW,
-       K_TEMPO, K_SOUND, K_SNDIN, K_NONE };
+       K_TEMPO, K_SOUND, K_SNDIN, K_TOUCH, K_CURVE, K_ATM, K_ATS, K_NONE };
 static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_VAL0, K_VAL1, K_VAL2, K_VAL3},
     {K_ROOT, K_SCALE, K_VEL, K_HUMAN},
@@ -310,6 +528,7 @@ static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_SOUND, K_SNDIN, K_MASTER, K_NONE},
     {K_TEMPO, K_CLOCK, K_SEQCH, K_GLOW},
 };
+static const uint8_t TOUCH_KNOB[4] = {K_TOUCH, K_CURVE, K_ATM, K_ATS};   /* Setup's second page */
 /* FX held on Play: the knobs set the bank's controller numbers, shown once it has been held a moment
  * (a tap to change banks does not flash them) or a knob turns */
 #define FX_HOLD_MS 400u
@@ -321,6 +540,8 @@ static int view_knob(int i)
 {
     if (fx_cc())
         return K_CC0 + i;
+    if (ui.view == V_SETUP && ui.setup_pg)
+        return TOUCH_KNOB[i];
     return VIEW_KNOB[ui.view][i];
 }
 
@@ -353,6 +574,10 @@ static int knob_get(int k)
     case K_TEMPO: return proj.tempo;
     case K_SOUND: return proj.sound != SOUND_OFF;
     case K_SNDIN: return !proj.in_mute;
+    case K_TOUCH: return proj.touch;
+    case K_CURVE: return proj.vel_curve;
+    case K_ATM: return proj.at_mode;
+    case K_ATS: return proj.at_sens;
     default: return 0;
     }
 }
@@ -367,7 +592,9 @@ static void knob_range(int k, int *lo, int *hi)
     case K_AMODE: *hi = NARP - 1; break;
     case K_ARATE: *hi = NRATE - 1; break;
     case K_AOCT: *lo = 1; *hi = 3; break;
-    case K_SOUND: case K_SNDIN: *hi = 1; break;
+    case K_SOUND: case K_SNDIN: case K_TOUCH: *hi = 1; break;
+    case K_CURVE: case K_ATS: *lo = -5; *hi = 5; break;
+    case K_ATM: *hi = NAT - 1; break;
     case K_TEMPO: *lo = 40; *hi = 240; break;
     case K_ARP: *hi = 2; break;
     case K_STEPS: *lo = 1; *hi = 16; break;
@@ -384,7 +611,7 @@ static void knob_name(int k, char *b)
 {
     static const char *const N[] = {"Root", "Scale", "Velocity", "Humanize", "Mode", "Rate", "Octaves", "Arp",
                                     "Steps", "Hits", "Rotate", "Note", "Clock", "Seq ch", "MASTER", "Glow",
-                                    "Tempo", "Sound", "MIDI in"};
+                                    "Tempo", "Sound", "MIDI in", "Velocity", "Curve", "Aftertouch", "AT sens"};
     if (k <= K_VAL3)
         put_u(put_s(b, "CC "), proj.cc[proj.bank][k - K_VAL0]);
     else if (k <= K_CC3)
@@ -415,6 +642,16 @@ static void knob_text(int k, char *b)
     case K_GLOW: put_s(b, GLOW_NAME[v]); break;
     case K_SOUND: put_s(b, v ? "On" : "Off"); break;
     case K_SNDIN: put_s(b, v ? "Plays" : "Ignored"); break;
+    case K_TOUCH: put_s(b, v ? "Keys" : "Fixed"); break;
+    case K_ATM: put_s(b, AT_NAME[v]); break;
+    case K_CURVE: case K_ATS:
+        if (v > 0)
+            put_u(put_s(b, "+"), (uint32_t)v);
+        else if (v < 0)
+            put_u(put_s(b, "-"), (uint32_t)-v);
+        else
+            put_s(b, "0");
+        break;
     case K_TEMPO:
         if (proj.clock == CLK_EXT)
             put_s(b, "Ext");
@@ -490,6 +727,10 @@ static void knob_set(int k, int v)
                 return;                  /* following a clock from outside */
             proj.tempo = (uint8_t)v;
             break;
+        case K_TOUCH: all_keys_up(); proj.touch = (uint8_t)v; touch_apply(); break;
+        case K_ATM: at_off(); proj.at_mode = (uint8_t)v; touch_apply(); break;
+        case K_CURVE: proj.vel_curve = (int8_t)v; touch_apply(); break;
+        case K_ATS: proj.at_sens = (int8_t)v; break;
         default: return;
         }
     }
@@ -537,7 +778,7 @@ static void bank_to(int b)                     /* the knob bank, with a word on 
 {
     char t[2] = {(char)('A' + b), 0};
     proj.bank = (uint8_t)b;
-    say("KNOB BANK", t);
+    say_as("KNOB BANK", t, 0);                  /* a screen reader hears the page: the bank, its knobs */
     ui.touched = -1;
     mark_dirty();
 }
@@ -565,7 +806,7 @@ static void button_down(int b)
         engine_play(ui.playing);
         put_s(ui.last, ui.playing ? "Start" : "Stop");
         break;
-    case B_REC: panic(); break;
+    case B_REC: panic(); sp_event(SE_PANIC, 0, 0); break;
     case B_OCTDN: octave(-1); break;
     case B_OCTUP: octave(1); break;
     case B_FX:
@@ -605,7 +846,7 @@ static void button_up(int b)
             ui.dirty = 0;
             say("SAVED", 0);
         } else {
-            say("NOT SAVED", "FLASH ERROR");
+            warn("NOT SAVED", "FLASH ERROR");
         }
         break;
     default: break;
@@ -620,6 +861,9 @@ static void seq_key(int k)
         if (w < trk()->steps) {
             trk()->pat ^= (uint16_t)(1u << w);
             mark_dirty();
+            sp_event(SE_STEP, w, trk()->pat >> w & 1u);
+        } else {
+            sp_event(SE_STEP_OUT, w, 0);         /* past the track's end: nothing (a screen reader says so) */
         }
     } else if (b >= 0 && b < 4) {
         ui.track = (uint8_t)b;
@@ -627,6 +871,7 @@ static void seq_key(int k)
     } else if (b >= 4 && b < 8) {
         proj.trk[b - 4].mute = (uint8_t)!proj.trk[b - 4].mute;
         mark_dirty();
+        sp_event(SE_MUTE, b - 4, proj.trk[b - 4].mute);
     }
 }
 
@@ -655,15 +900,18 @@ static void input(void)
     ui.keys = keys;
     for (i = 0; i < NKEYS; i++)
         if (ch >> i & 1u) {
+            if (ui.view != V_SEQ && touch_live && sense_is_analog(i))
+                continue;                        /* sense.c plays it (touch_events) */
             if (keys >> i & 1u) {
                 if (ui.view == V_SEQ)
                     seq_key((int)i);
                 else
-                    key_down((int)i);
+                    key_down((int)i, edge_vel(i));
             } else {
                 key_up((int)i);
             }
         }
+    touch_events();
     ch = btn ^ ui.btn;
     ui.btn = btn;
     for (i = 0; i < NB; i++)
@@ -683,6 +931,9 @@ static void input(void)
             bank_to(proj.bank + d);
         } else if (ui.view == V_SEQ && ui.track + d >= 0 && ui.track + d < NTRACKS) {
             ui.track = (uint8_t)(ui.track + d);
+            ui.touched = -1;
+        } else if (ui.view == V_SETUP && ui.setup_pg + d >= 0 && ui.setup_pg + d < 2) {
+            ui.setup_pg = (uint8_t)(ui.setup_pg + d);
             ui.touched = -1;
         }
     }
@@ -1079,20 +1330,26 @@ static void draw_arp(void)
 }
 
 /* on channel 10, the General MIDI drum names for the common notes */
-static void track_name(int n, char *b)
+static const uint8_t DRUM_N[21] = {35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 54, 56, 70, 75};
+static int drum_index(int n)                     /* on channel 10, the drum's place in DRUM_N; else -1 */
 {
-    static const uint8_t N[] = {35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 54, 56, 70, 75};
-    static const char *const S[] = {"Kick", "Kick", "Rim", "Snare", "Clap", "Snare", "Tom", "Hat", "Tom", "Pedal",
-                                    "Tom", "Open", "Tom", "Tom", "Crash", "Tom", "Ride", "Tamb", "Bell", "Shake",
-                                    "Clave"};
     uint32_t i;
     if (proj.seq_ch == 9)
-        for (i = 0; i < sizeof N; i++)
-            if (N[i] == n) {
-                put_s(b, S[i]);
-                return;
-            }
-    put_note(b, n);
+        for (i = 0; i < sizeof DRUM_N; i++)
+            if (DRUM_N[i] == n)
+                return (int)i;
+    return -1;
+}
+static void track_name(int n, char *b)
+{
+    static const char *const S[21] = {"Kick", "Kick", "Rim", "Snare", "Clap", "Snare", "Tom", "Hat", "Tom", "Pedal",
+                                      "Tom", "Open", "Tom", "Tom", "Crash", "Tom", "Ride", "Tamb", "Bell", "Shake",
+                                      "Clave"};
+    int i = drum_index(n);
+    if (i >= 0)
+        put_s(b, S[i]);
+    else
+        put_note(b, n);
 }
 
 static void draw_seq(void)
@@ -1119,11 +1376,47 @@ static void draw_seq(void)
     }
 }
 
+/* Setup's Touch page: what the keys sense, the last velocity and the pressure now */
+static void draw_touch(void)
+{
+    char t[40];
+    int32_t w;
+    uint32_t k, top = 0;
+    cv_text(10, 2, &FONT_S, "Touch", K_TEXT);
+    if (!touch_live) {
+        cv_text(10, 24, &FONT_XS, "Every note plays at the Velocity", K_DIM);
+        cv_text(10, 38, &FONT_XS, "set on Keys. KNOB 1: from the keys.", K_DIM);
+        cv_text(10, 58, &FONT_XS, "KNOB 3: aftertouch from the keys.", K_DIM);
+        return;
+    }
+    cv_text(10, 22, &FONT_XS, proj.touch ? "Velocity from the keys" : "Velocity fixed (Keys page)", K_DIM);
+    put_s(put_s(t, "Aftertouch "), proj.at_mode == AT_POLY ? "per note" : proj.at_mode == AT_CHAN ? "for the channel" : "off");
+    cv_text(10, 36, &FONT_XS, t, K_DIM);
+    cv_text(10, 60, &FONT_XS, "Velocity", K_DIM);
+    w = 150 * (int32_t)ui.last_vel / 127;
+    cv_round(76, 61, 150, 9, 3, K_LINE);
+    if (w)
+        cv_round(76, 61, w < 6 ? 6 : w, 9, 3, K_HOT);
+    for (k = 0; k < NKEYS; k++)
+        if (at_sent[k] > top)
+            top = at_sent[k];
+    cv_text(10, 78, &FONT_XS, "Pressure", K_DIM);
+    w = 150 * (int32_t)top / 127;
+    cv_round(76, 79, 150, 9, 3, K_LINE);
+    if (w)
+        cv_round(76, 79, w < 6 ? 6 : w, 9, 3, K_COOL);
+    cv_text(10, 100, &FONT_XS, "F3 to C5 sense both; the top seven, velocity.", K_DIM);
+}
+
 static void draw_setup(void)                     /* the settings below; Bluetooth and its log here */
 {
     char t[40];
     int s = plat_ble_state(), i, n;
     const char *st;
+    if (ui.setup_pg) {
+        draw_touch();
+        return;
+    }
     if (!CT_BLE) {                               /* the USB-only build: what its ports have carried */
         char *b;
         cv_text(10, 2, &FONT_S, "MIDI", K_TEXT);
@@ -1202,7 +1495,12 @@ static void draw_main(void)
     if (ui.view == V_SOUND)
         h = hash(hash(h, gm_voices | proj.sound << 8 | proj.in_mute << 12 | (uint32_t)gm_program[proj.chan] << 16),
                  plat_cpu_pct());
-    if (ui.view == V_SETUP) {
+    if (ui.view == V_SETUP && ui.setup_pg) {
+        uint32_t k, top = 0;
+        for (k = 0; k < NKEYS; k++)
+            top = at_sent[k] > top ? at_sent[k] : top;
+        h = hash(hash(h, 1u | ui.last_vel << 8 | top << 16), (uint32_t)touch_live | proj.touch << 1 | proj.at_mode << 2);
+    } else if (ui.view == V_SETUP) {
         h = hash(hash(h, plat_ble_log_total()), ui.n_in[PORT_BLE] ^ ui.n_out[PORT_BLE] << 16);
         h = hash(hash(h, ui.n_in[PORT_USB] ^ ui.n_out[PORT_USB] << 16), ui.n_in[PORT_TRS]);
         for (i = 0; i < 7; i++)
@@ -1269,6 +1567,11 @@ static void knob_tag(char *t, int *dots, int *cur)
         put_u(put_s(b, " "), ui.track + 1u);
         *dots = NTRACKS;
         *cur = ui.track;
+    } else if (ui.view == V_SETUP) {
+        if (ui.setup_pg)
+            put_s(t, "TOUCH");
+        *dots = 2;
+        *cur = ui.setup_pg;
     }
 }
 static void footer_text(const char **a, const char **b, const char **c)
@@ -1288,20 +1591,27 @@ static void footer_text(const char **a, const char **b, const char **c)
     case V_SEQ: *a = "WHITE: STEPS"; *b = "SELECT, BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
     case V_SOUND: *a = "PRESETS: THE SOUND"; *b = "MASTER: VOLUME"; break;
     default:
-        *a = "SAVE: NOW";
-        *b = CT_BLE && plat_ble_state() == BLE_OFF ? "HOLD SAVE: BLUETOOTH" : "OCT- + OCT+ 5 S: UPDATE";
+        if (ui.setup_pg) {
+            *a = "SELECT: SETUP";
+            *b = "CURVE +: FIRMER";
+            *c = "AT SENS +: LIGHTER";
+            break;
+        }
+        *a = "SELECT: TOUCH";
+        *b = CT_BLE && plat_ble_state() == BLE_OFF ? "HOLD SAVE: BLUETOOTH" : "SAVE: NOW";
         break;
     }
 }
 static int knob_switch(int k)                    /* a few named positions: pips, not an arc */
 {
-    return k == K_ARP || k == K_CLOCK || k == K_GLOW || k == K_SOUND || k == K_SNDIN || k == K_AOCT;
+    return k == K_ARP || k == K_CLOCK || k == K_GLOW || k == K_SOUND || k == K_SNDIN || k == K_AOCT ||
+           k == K_TOUCH || k == K_ATM;
 }
 
 static void draw_knobs(void)
 {
     uint32_t h = hash(2166136261u, ui.view | (uint32_t)ui.touched << 8 | proj.bank << 16 | ui.track << 20 |
-                                       (uint32_t)fx_cc() << 24), i;
+                                       (uint32_t)fx_cc() << 24 | (uint32_t)ui.setup_pg << 25), i;
     int now_touch = plat_ms() < ui.touch_until, dots, cur = 0;
     char t[32];
     for (i = 0; i < 4; i++)
@@ -1423,6 +1733,613 @@ static void autosave(void)
         ui.dirty = 0;
 }
 
+/* ------------------------------------------------------ screen reader --- */
+/* The screen as text for a screen reader on the computer (announce.c; fm1-reader): a page once it settles,
+ * with its knobs; a knob's value as it turns (a controller with its name: "CC 74 cutoff 64"); the channel and
+ * the program; the note or the chord a key plays, by name ("D minor"), and on the Touch page its velocity;
+ * the Sequencer's steps and mutes; play and stop; what a button did (say). WHERE (the reader asks, or has
+ * just started listening) is everything on the screen. The pressure bar is never said (it changes all the
+ * time), nor the MIDI counters but on WHERE. Nothing is built while no reader listens. The screen's short
+ * words are said in full by the words file (firmware/words.tsv); the rest is said here in words. */
+static char sp_buf[ANN_MAX + 1] SP_POOL;
+static uint32_t sp_n;
+static const char *const SCALE_SAID[NSCALES] = {"chromatic", "major", "minor", "dorian", "mixolydian",
+                                                "harmonic minor", "pentatonic", "pentatonic minor", "blues"};
+static const char *const CLOCK_SAID[NCLK] = {"internal and sent out", "internal only", "external"};
+static const char *const AT_SAID[NAT] = {"off", "per note", "for the channel"};
+static const char *const DRUM_SAID[21] = {"acoustic kick", "kick", "rimshot", "snare", "clap", "electric snare",
+                                          "low floor tom", "closed hat", "high floor tom", "pedal hat", "low tom",
+                                          "open hat", "low mid tom", "high mid tom", "crash", "high tom", "ride",
+                                          "tambourine", "cowbell", "maracas", "claves"};
+/* the controllers with a name of their own (MIDI 1.0) */
+static const uint8_t CCN_N[25] = {0, 1, 2, 4, 5, 6, 7, 8, 10, 11, 64, 65, 66, 67, 68, 71, 72, 73, 74, 75, 76, 77,
+                                  78, 91, 93};
+static const char *const CCN_S[25] = {"bank select", "mod wheel", "breath", "foot pedal", "portamento time",
+                                      "data entry", "volume", "balance", "pan", "expression", "sustain",
+                                      "portamento", "sostenuto", "soft pedal", "legato", "resonance", "release",
+                                      "attack", "cutoff", "decay", "vibrato rate", "vibrato depth", "vibrato delay",
+                                      "reverb", "chorus"};
+
+static void sp_cat(const char *s)
+{
+    while (*s && sp_n < ANN_MAX)
+        sp_buf[sp_n++] = *s++;
+    sp_buf[sp_n] = 0;
+}
+static void sp_num(uint32_t v)
+{
+    char t[12];
+    put_u(t, v);
+    sp_cat(t);
+}
+static void sp_note(int n)                       /* "C4", "C sharp minus 1" (the screen's "C#-1") */
+{
+    char t[8];
+    if (n < 12) {
+        sp_cat(NOTE_NAME[n % 12]);
+        sp_cat(" minus 1");
+        return;
+    }
+    put_note(t, n);
+    sp_cat(t);
+}
+static int sp_cc(uint32_t n)                     /* "CC 74 cutoff"; 1 if it has a name */
+{
+    uint32_t i;
+    sp_cat("CC ");
+    sp_num(n);
+    for (i = 0; i < sizeof CCN_N; i++)
+        if (CCN_N[i] == n) {
+            sp_cat(" ");
+            sp_cat(CCN_S[i]);
+            return 1;
+        }
+    return 0;
+}
+static void sp_knob(int k)                       /* a knob's readout: its name, then its value */
+{
+    char t[24];
+    int v = knob_get(k), d;
+    if (k <= K_VAL3) {
+        sp_cat(sp_cc(proj.cc[proj.bank][k - K_VAL0]) ? " " : " value ");
+        sp_num((uint32_t)v);
+        return;
+    }
+    if (k == K_MASTER) {
+        sp_cat("Master ");
+        if (v)
+            sp_cc((uint32_t)v);
+        else
+            sp_cat("volume");
+        return;
+    }
+    knob_name(k, t);
+    sp_cat(t);
+    sp_cat(k <= K_CC3 ? ", " : " ");
+    switch (k) {
+    case K_CC0: case K_CC1: case K_CC2: case K_CC3: sp_cc((uint32_t)v); return;
+    case K_SCALE: sp_cat(SCALE_SAID[v]); return;
+    case K_CLOCK: sp_cat(CLOCK_SAID[v]); return;
+    case K_TOUCH: sp_cat(v ? "from the keys" : "fixed"); return;
+    case K_ATM: sp_cat(AT_SAID[v]); return;
+    case K_TEMPO:
+        if (proj.clock == CLK_EXT) {
+            sp_cat("external clock");
+            return;
+        }
+        break;
+    case K_NOTE:
+        if ((d = drum_index(v)) >= 0) {
+            sp_cat(DRUM_SAID[d]);
+            return;
+        }
+        break;
+    default: break;
+    }
+    knob_text(k, t);
+    sp_cat(t);
+}
+
+/* three notes by name, in any inversion ("D minor", "F# diminished"); else the notes */
+static void sp_chord(const uint8_t *q, int n)
+{
+    static const uint8_t SHAPE[6][2] = {{4, 7}, {3, 7}, {3, 6}, {4, 8}, {5, 7}, {2, 7}};
+    static const char *const SHAPE_SAID[6] = {" major", " minor", " diminished", " augmented", " suspended fourth",
+                                              " suspended second"};
+    int r, s, i;
+    if (n == 3)
+        for (r = 0; r < 3; r++) {                /* each note as the root */
+            int a = ((q[(r + 1) % 3] - q[r]) % 12 + 12) % 12, b = ((q[(r + 2) % 3] - q[r]) % 12 + 12) % 12;
+            for (s = 0; s < 6; s++)
+                if ((a == SHAPE[s][0] && b == SHAPE[s][1]) || (a == SHAPE[s][1] && b == SHAPE[s][0])) {
+                    sp_cat(NOTE_NAME[q[r] % 12]);
+                    sp_cat(SHAPE_SAID[s]);
+                    return;
+                }
+        }
+    sp_cat("notes ");
+    for (i = 0; i < n; i++) {
+        if (i)
+            sp_cat(", ");
+        sp_note(q[i]);
+    }
+}
+static void sp_played(void)                      /* the key just played: its note or chord */
+{
+    sp_n = 0;
+    if (sp.ev_n == 1)
+        sp_note(sp.ev_notes[0]);
+    else
+        sp_chord(sp.ev_notes, sp.ev_n);
+    if (ui.view == V_SETUP && ui.setup_pg && touch_live && proj.touch) {   /* the Touch page: what the key sensed */
+        sp_cat(", velocity ");
+        sp_num(sp.ev_vel);
+    }
+}
+static void sp_program(void)                     /* "Program 53, Choir Aahs" */
+{
+    sp_n = 0;
+    sp_cat("Program ");
+    sp_num(proj.program + 1u);
+    if (proj.sound != SOUND_OFF) {
+        sp_cat(", ");
+        sp_cat(proj.chan == 9 ? "drum kit" : GM_PROGRAM[proj.program]);
+    }
+}
+static void sp_channel(void)
+{
+    sp_n = 0;
+    sp_cat("Channel ");
+    sp_num(proj.chan + 1u);
+    if (proj.chan == 9 && proj.sound != SOUND_OFF)
+        sp_cat(", drum kit");
+}
+
+/* the page's name: "Play page, bank A", "Sequencer page, track 2", "Touch page" */
+static void sp_page(void)
+{
+    char t[2] = {(char)('A' + proj.bank), 0};
+    if (fx_cc()) {
+        sp_cat("Controller numbers, bank ");
+        sp_cat(t);
+        return;
+    }
+    if (ui.view == V_SETUP && ui.setup_pg) {
+        sp_cat("Touch page");
+        return;
+    }
+    sp_cat(VIEW_NAME[ui.view]);
+    sp_cat(" page");
+    if (ui.view == V_PLAY) {
+        sp_cat(", bank ");
+        sp_cat(t);
+    } else if (ui.view == V_SEQ) {
+        sp_cat(", track ");
+        sp_num(ui.track + 1u);
+    }
+}
+
+/* the page and its knobs; all: what the page shows, the top bar and the status line too */
+static void sp_screen(int all)
+{
+    int i, n = 0;
+    sp_n = 0;
+    sp_buf[0] = 0;
+    sp_page();
+    for (i = 0; i < 4; i++) {
+        int k = view_knob(i);
+        if (k == K_NONE)
+            continue;
+        sp_cat(n++ ? ", " : ": ");
+        sp_knob(k);
+    }
+    if (!all)
+        return;
+    switch (ui.view) {
+    case V_SCALE:
+        if (!proj.scale) {
+            sp_cat(". The keys play every note");
+            break;
+        }
+        sp_cat(". Notes ");                      /* the white keys' (the black keys: the chords on them) */
+        for (i = 0; i < SCALE_LEN[proj.scale]; i++) {
+            const char *nm = NOTE_NAME[(proj.root + SCALE_IV[proj.scale][i]) % 12];
+            if (i)                               /* "D and D sharp": a note and its sharp, together */
+                sp_cat(nm[0] == NOTE_NAME[(proj.root + SCALE_IV[proj.scale][i - 1]) % 12][0] ? " and " : ", ");
+            sp_cat(nm);
+        }
+        break;
+    case V_SEQ: {
+        const track_t *t = trk();
+        sp_cat(". Steps on: ");
+        for (i = 0, n = 0; i < t->steps; i++)
+            if (t->pat >> i & 1u) {
+                if (n++)
+                    sp_cat(", ");
+                sp_num((uint32_t)i + 1u);
+            }
+        if (!n)
+            sp_cat("none");
+        for (i = 0; i < NTRACKS; i++)
+            if (proj.trk[i].mute) {
+                sp_cat(". Track ");
+                sp_num((uint32_t)i + 1u);
+                sp_cat(" muted");
+            }
+        break;
+    }
+    case V_SOUND:
+        if (proj.sound == SOUND_OFF) {
+            sp_cat(". The onboard sounds are off");
+            break;
+        }
+        sp_cat(". Sound ");
+        if (proj.chan == 9) {
+            sp_cat("drum kit");
+        } else {
+            sp_cat(GM_PROGRAM[gm_program[proj.chan]]);
+            sp_cat(", program ");
+            sp_num(gm_program[proj.chan] + 1u);
+        }
+        sp_cat(proj.in_mute ? ". It plays the keys, not MIDI in" : ". It plays the keys and MIDI in");
+        break;
+    case V_SETUP:
+        if (ui.setup_pg) {
+            if (!touch_live)
+                sp_cat(". Every note plays at the velocity set on the Keys page");
+            else if (ui.last_vel) {
+                sp_cat(". Last velocity ");
+                sp_num(ui.last_vel);
+            }
+            break;
+        }
+        if (CT_BLE) {
+            int s = plat_ble_state();
+            sp_cat(". Bluetooth ");
+            sp_cat(plat_ble_connected() ? "connected" : s == BLE_READY ? "advertising" : s == BLE_STARTING ? "starting" :
+                   s == BLE_FAILED ? "failed" : "off");
+            if (s != BLE_OFF) {
+                sp_cat(", in ");
+                sp_num(ui.n_in[PORT_BLE]);
+                sp_cat(", out ");
+                sp_num(ui.n_out[PORT_BLE]);
+            }
+        }
+        sp_cat(". USB in ");
+        sp_num(ui.n_in[PORT_USB]);
+        sp_cat(", out ");
+        sp_num(ui.n_out[PORT_USB]);
+        sp_cat(". TRS in ");
+        sp_num(ui.n_in[PORT_TRS]);
+        sp_cat(". CTL-1 " CT_VERSION);
+        break;
+    default: break;
+    }
+    sp_cat(". Channel ");                        /* the top bar */
+    sp_num(proj.chan + 1u);
+    if (proj.clock == CLK_EXT) {
+        sp_cat(", external clock");
+    } else {
+        sp_cat(", tempo ");
+        sp_num(proj.tempo);
+    }
+    sp_cat(ui.playing ? ", playing" : ", stopped");
+    if (ui.view == V_SEQ || ui.view == V_SETUP)       /* the status line where it matters (and fits) */
+        return;
+    if (ui.view != V_SOUND) {
+        sp_cat(". Lowest key ");
+        sp_note(proj.scale ? SCALE0_NOTE + proj.root + 12 * proj.octave : KEY0_NOTE + 12 * proj.octave);
+    }
+    if (ui.view == V_PLAY || ui.view == V_ARP) {
+        sp_cat(". Program ");
+        sp_num(proj.program + 1u);
+        if (proj.sound != SOUND_OFF) {
+            sp_cat(", ");
+            sp_cat(proj.chan == 9 ? "drum kit" : GM_PROGRAM[proj.program]);
+        }
+    }
+    if (proj.arp_on && ui.view != V_ARP)
+        sp_cat(proj.arp_latch ? ". Arp latched" : ". Arp on");
+    if (ui.sustain)
+        sp_cat(ui.sus_lock ? ". Sustain locked" : ". Sustain on");
+}
+
+static uint32_t sp_ctx_sig(void)
+{
+    uint32_t h = hash(2166136261u, ui.view | (uint32_t)fx_cc() << 8);
+    if (ui.view == V_PLAY)
+        h = hash(h, proj.bank);
+    else if (ui.view == V_SEQ)
+        h = hash(h, ui.track);
+    else if (ui.view == V_SETUP)
+        h = hash(h, ui.setup_pg);
+    return h;
+}
+static void sp_snap(void)
+{
+    int i;
+    for (i = 0; i < 4; i++)
+        sp.val[i] = (int16_t)(view_knob(i) == K_NONE ? 0 : knob_get(view_knob(i)));
+    sp.chan = proj.chan;
+    sp.program = proj.program;
+    sp.playing = ui.playing;
+    sp.sus_lock = ui.sus_lock;
+    sp.ble = (uint8_t)plat_ble_connected();
+    sp.touch_until = ui.touch_until;
+}
+
+static void speak(void)
+{
+    uint32_t now = plat_ms(), c;
+    int where = ann_where(), i, changed = -1, ev = sp.ev;
+    if (!ann_on()) {
+        sp.started = 0;
+        sp_said = 0;
+        sp.ev = SE_NONE;
+        return;
+    }
+    sp.ev = SE_NONE;
+    if (!sp.started || where) {                       /* everything on the screen */
+        sp.started = 1;
+        sp.ctx = sp_ctx_sig();
+        sp_snap();
+        sp_screen(1);
+        ann_say(sp_buf, 0, ANN_NOW);
+        sp_said = 0;
+        return;
+    }
+    if (sp_said) {                                    /* a button said what it did (and what it changed) */
+        sp_said = 0;
+        sp_snap();
+        return;
+    }
+    if (ev == SE_PANIC)
+        sp.sus_lock = ui.sus_lock;                    /* (all notes off says it: sustain off too) */
+    if (ui.playing != sp.playing) {
+        sp.playing = ui.playing;
+        ann_say(ui.playing ? "Play" : "Stop", 0, proj.clock == CLK_EXT ? 0u : ANN_NOW);   /* from outside: queued */
+    }
+    if (CT_BLE && plat_ble_connected() != sp.ble) {   /* not the user's doing: queued */
+        sp.ble = (uint8_t)plat_ble_connected();
+        ann_say(sp.ble ? "Bluetooth connected" : "Bluetooth disconnected", 0, 0);
+    }
+    if (ui.sus_lock != sp.sus_lock) {                 /* locking says SUSTAIN LOCKED itself */
+        sp.sus_lock = ui.sus_lock;
+        if (!ui.sus_lock)
+            ann_say("Sustain unlocked", 0, ANN_NOW);
+    }
+    c = sp_ctx_sig();
+    if (c != sp.ctx) {                                /* a new page: said when it settles */
+        sp.ctx = c;
+        sp_snap();
+        sp_screen(0);
+        ann_later(sp_buf, ANN_NOW, 200u, now);
+        return;
+    }
+    if (proj.chan != sp.chan) {                       /* ALGORITHM */
+        sp_snap();
+        sp_channel();
+        ann_later(sp_buf, ANN_NOW, 120u, now);
+        return;
+    }
+    if (proj.program != sp.program) {                 /* PRESETS */
+        sp_snap();
+        sp_program();
+        ann_later(sp_buf, ANN_NOW, 120u, now);
+        return;
+    }
+    for (i = 0; i < 4; i++) {                         /* a knob turning */
+        int k = view_knob(i), v = k == K_NONE ? 0 : knob_get(k);
+        if (v != sp.val[i] && changed < 0)
+            changed = i;
+    }
+    if (changed < 0 && ui.touch_until != sp.touch_until && ui.touched >= 0 && view_knob(ui.touched) != K_NONE)
+        changed = ui.touched;                         /* turned, but at its end (or Tempo on an outside clock) */
+    if (changed >= 0) {
+        sp_snap();
+        sp_n = 0;
+        sp_knob(view_knob(changed));
+        ann_later(sp_buf, ANN_NOW, 120u, now);
+        return;
+    }
+    switch (ev) {                                     /* the keys */
+    case SE_KEY:
+        sp_played();
+        ann_later(sp_buf, ANN_NOW, 150u, now);        /* a run of notes: the last, once it settles */
+        break;
+    case SE_STEP:
+        sp_n = 0;
+        sp_cat("Step ");
+        sp_num(sp.ev_arg + 1u);
+        sp_cat(sp.ev_on ? " on" : " off");
+        ann_say(sp_buf, 0, ANN_NOW);
+        break;
+    case SE_STEP_OUT:
+        sp_n = 0;
+        sp_cat("Step ");
+        sp_num(sp.ev_arg + 1u);
+        sp_cat(" not set: track ");
+        sp_num(ui.track + 1u);
+        sp_cat(" has ");
+        sp_num(trk()->steps);
+        sp_cat(" steps");
+        ann_say(sp_buf, 0, ANN_NOW | ANN_KEEP);
+        break;
+    case SE_MUTE:
+        sp_n = 0;
+        sp_cat("Track ");
+        sp_num(sp.ev_arg + 1u);
+        sp_cat(sp.ev_on ? " muted" : " unmuted");
+        ann_say(sp_buf, 0, ANN_NOW);
+        break;
+    case SE_PANIC: ann_say("All notes off", 0, ANN_NOW); break;
+    default: break;
+    }
+}
+
+#ifdef CT_HOST
+/* every page, knob value, chord and message as a screen reader gets them (the "speakdump" command):
+ * KIND <tab> the text sent (fm1-reader/tools/audit.mjs puts it in words with web/words/ and checks it) */
+static void sp_print(const char *kind, const char *t) { printf("%s\t%s\n", kind, t); }
+static void sp_dump_page(void)
+{
+    project_t keep = proj;
+    int i, x, lo, hi;
+    sp_screen(0);
+    sp_print("SCREEN", sp_buf);
+    sp_screen(1);
+    sp_print("WHERE", sp_buf);
+    for (i = 0; i < 4; i++) {
+        int k = view_knob(i);
+        if (k == K_NONE)
+            continue;
+        knob_range(k, &lo, &hi);
+        for (x = lo; x <= hi; x++) {
+            knob_set(k, x);
+            sp_n = 0;
+            sp_knob(k);
+            sp_print("KNOB", sp_buf);
+        }
+        proj = keep;
+        touch_apply();
+    }
+}
+static void speak_dump(void)
+{
+    static const char *const MSG[][2] = {{"LOWEST KEY", "F#3"}, {"LOWEST KEY", "C0"}, {"SUSTAIN", "LOCKED"},
+                                         {"SAVED", 0}, {"BLUETOOTH", "STARTING"}, {"UPDATE MODE IN", "3.."},
+                                         {"UPDATE MODE", "CANCELLED"}};
+    static uint8_t keep_ui[sizeof ui];
+    project_t keep = proj;
+    int v, q, x, i, k;
+    uint8_t notes[3];
+    memcpy(keep_ui, &ui, sizeof ui);
+    for (v = 0; v < NVIEWS; v++) {                    /* every page (Play: each bank, and FX held; Sequencer:
+                                                       * each track, on channel 10 and on another) */
+        ui.view = (uint8_t)v;
+        for (q = 0; q < (v == V_PLAY ? 2 * NBANKS : v == V_SEQ ? 2 * NTRACKS : v == V_SETUP ? 2 : 1); q++) {
+            ui.btn = 0;
+            ui.setup_pg = (uint8_t)(v == V_SETUP && q);
+            if (v == V_PLAY) {
+                proj.bank = (uint8_t)(q % NBANKS);
+                ui.btn = q >= NBANKS ? 1u << B_FX : 0u;
+                ui.fx_used = 1;
+            } else if (v == V_SEQ) {
+                ui.track = (uint8_t)(q % NTRACKS);
+                proj.seq_ch = (uint8_t)(q < NTRACKS ? 9 : 0);
+            }
+            sp_dump_page();
+            proj = keep;
+        }
+    }
+    ui.btn = 0;
+    ui.view = V_PLAY;                                 /* WHERE in other states */
+    for (x = 0; x < 8; x++) {
+        proj.sound = (uint8_t)(x & 1 ? SOUND_OFF : SOUND_IN);
+        proj.chan = (uint8_t)(x & 2 ? 9 : 0);
+        proj.clock = (uint8_t)(x & 4 ? CLK_EXT : CLK_INT_OUT);
+        proj.arp_on = (uint8_t)(x & 1);
+        proj.arp_latch = (uint8_t)(x >> 1 & 1);
+        ui.playing = (uint8_t)(x >> 2 & 1);
+        ui.sustain = (uint8_t)(x >> 1 & 1);
+        ui.sus_lock = (uint8_t)(x & 1);
+        sp_screen(1);
+        sp_print("WHERE", sp_buf);
+        sp_n = 0;
+        sp_knob(K_TEMPO);
+        sp_print("KNOB", sp_buf);
+    }
+    proj = keep;
+    ui.playing = ui.sustain = ui.sus_lock = 0;
+    ui.view = V_SCALE;
+    for (x = 0; x < NSCALES; x++)
+        for (i = 0; i < 12; i++) {
+            proj.scale = (uint8_t)x;
+            proj.root = (uint8_t)i;
+            sp_screen(1);
+            sp_print("WHERE", sp_buf);
+            for (k = 0; k < 11 && x; k++) {           /* the black keys' chords */
+                sp.ev_n = (uint8_t)key_notes(BLACK_K[k], notes);
+                memcpy(sp.ev_notes, notes, 3);
+                sp_played();
+                sp_print("CHORD", sp_buf);
+            }
+        }
+    proj = keep;
+    ui.view = V_SEQ;                                  /* the steps: none, all, muted */
+    for (x = 0; x < 3; x++) {
+        proj.trk[0].pat = x == 1 ? 0xFFFFu : 0u;
+        proj.trk[1].mute = proj.trk[3].mute = (uint8_t)(x == 2);
+        sp_screen(1);
+        sp_print("WHERE", sp_buf);
+    }
+    proj = keep;
+    ui.view = V_SETUP;                                /* the Touch page: off, on with a velocity */
+    ui.setup_pg = 1;
+    for (x = 0; x < 2; x++) {
+        proj.touch = (uint8_t)x;
+        touch_apply();
+        ui.last_vel = 87;
+        sp_screen(1);
+        sp_print("WHERE", sp_buf);
+    }
+    for (x = 0; x < 128; x++) {                       /* a note played on it */
+        sp.ev_n = 1;
+        sp.ev_notes[0] = (uint8_t)x;
+        sp.ev_vel = (uint8_t)(x ? x : 1);
+        sp_played();
+        sp_print("NOTE", sp_buf);
+    }
+    proj = keep;
+    touch_apply();
+    for (x = 0; x < 128; x++) {                       /* PRESETS, ALGORITHM */
+        proj.program = (uint8_t)x;
+        proj.sound = SOUND_IN;
+        sp_program();
+        sp_print("VALUE", sp_buf);
+    }
+    proj.sound = SOUND_OFF;
+    sp_program();
+    sp_print("VALUE", sp_buf);
+    proj.sound = SOUND_IN;
+    for (x = 0; x < 16; x++) {
+        proj.chan = (uint8_t)x;
+        sp_channel();
+        sp_print("VALUE", sp_buf);
+        proj.chan = 9;
+        sp_program();
+        sp_print("VALUE", sp_buf);
+    }
+    proj = keep;
+    ui.view = V_SOUND;
+    k = gm_program[0];
+    for (x = 0; x < 16; x++) {
+        gm_program[0] = (uint8_t)(x * 8 + 3);
+        proj.in_mute = (uint8_t)(x & 1);
+        sp_screen(1);
+        sp_print("WHERE", sp_buf);
+    }
+    gm_program[0] = (uint8_t)k;
+    for (i = 0; i < (int)(sizeof MSG / sizeof MSG[0]); i++) {
+        msg_text(MSG[i][0], MSG[i][1], sp_buf);
+        sp_print("MSG", sp_buf);
+    }
+    msg_text("NOT SAVED", "FLASH ERROR", sp_buf);
+    sp_print("WARN", sp_buf);
+    sp_print("WARN", "Step 13 not set: track 4 has 12 steps");
+    {
+        static const char *const SAID[] = {"Play", "Stop", "Bluetooth connected", "Bluetooth disconnected",
+                                           "Sustain unlocked", "All notes off", "Step 5 on", "Step 5 off",
+                                           "Track 2 muted", "Track 2 unmuted"};
+        for (i = 0; i < (int)(sizeof SAID / sizeof SAID[0]); i++)
+            sp_print("MSG", SAID[i]);
+    }
+    proj = keep;
+    memcpy(&ui, keep_ui, sizeof ui);
+    touch_apply();
+}
+#endif
+
 void ui_init(void)
 {
     memset(&ui, 0, sizeof ui);
@@ -1430,6 +2347,9 @@ void ui_init(void)
     ui.master_sent = -1;
     ui.master_raw = (int32_t)plat_master();
     lcd_fill(0, 0, 240, 240, K_BG);
+    touch_live = 0;
+    plat_sense(0);
+    touch_apply();                       /* Touch as saved */
     synth_program();                     /* the saved program, which the screen shows */
 }
 
@@ -1444,6 +2364,8 @@ void ui_frame(void)
     draw_status();
     draw_knobs();
     leds();
+    speak();                             /* a screen reader: what changed (announce.c) */
+    ann_tick(plat_ms());
     ui.frame++;
 }
 

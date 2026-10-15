@@ -44,14 +44,42 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-`./build.sh --release 0.1` makes a release build; the package is `build/ctl-0.1.fwsc`, identity FM-1_6000100.
+There are two builds, from the same source:
 
-`./build.sh --no-ble` makes the USB-only build (`build/ctl-usb.fwsc`, `ctl-usb-0.1.fwsc` with
-`--release 0.1`): `CT_BLE=0`, `firmware/src/app/ble_none.c` in place of `ble.c`, none of JieLi's BT
-libraries or the shim linked (the build fails if any of their symbols is in the image), and the
-Bluetooth knob, port and log hidden. It keeps the same identity, so a Bluetooth build installs over it as
-an update. `CT_BLE=0 sh host/build_host.sh` and `CT_BLE=0 web/emu/build.sh` build the simulator and the
-emulator to match; `tests/scenarios/usb/` runs against it.
+| Command | Package | What |
+| --- | --- | --- |
+| `./build.sh` | `build/ctl.fwsc` | **Bluetooth build** (the default): USB MIDI, TRS MIDI in and BLE MIDI |
+| `./build.sh --no-ble` | `build/ctl-usb.fwsc` | **USB-only build**: the released one |
+
+`--release X.Y` makes a release build of either (`ctl-X.Y.fwsc`, `ctl-usb-X.Y.fwsc`; identity FM-1_6XXYYZZ,
+e.g. `--release 0.1` is FM-1_6000100). Both builds have the same identity, so either installs over the other as an update.
+
+### The Bluetooth build
+
+```
+./build.sh && python3 tools/fm1_install.py build/ctl.fwsc --yes
+```
+
+It needs the AC79 SDK checkout above, including its `cpu/wl82/liba/` (the BT libraries). The build copies
+those libraries, three config sources and the headers into `build/ble/sdk`, then compiles the shim
+(`ble/shim`), the BLE MIDI profile (`ble/midi`) and `firmware/src/app/ble.c` and links them in.
+
+On the FM-1, Bluetooth starts at every boot and advertises as "FM-1" (on a Mac: Audio MIDI Setup, Window,
+Show MIDI Studio, the Bluetooth button, Connect). The Setup page shows its state and the stack's log, which
+survives a reset. If the last Bluetooth run crashed, it stays off at the next boot ("BLUETOOTH OFF: IT
+CRASHED"); hold SAVE on Setup for a second to start it by hand.
+
+**Do not distribute this build** (`ctl.fwsc`): it links JieLi's binary-only libraries into a GPL-3.0
+firmware, which needs a GPL section 7 permission from Felucca's copyright holders first (see LICENSING.md).
+Build it for yourself only.
+
+### The USB-only build
+
+`./build.sh --no-ble` sets `CT_BLE=0` and compiles `firmware/src/app/ble_none.c` in place of `ble.c`. It
+links none of JieLi's BT libraries and not the shim (the build fails if any of their symbols ends up in
+the image), and the UI hides Bluetooth (its port, state and log). `CT_BLE=0 sh host/build_host.sh`
+and `CT_BLE=0 web/emu/build.sh` build the simulator and the emulator to match; `tests/scenarios/usb/`
+runs against it.
 
 On macOS with podman instead of Docker, put a `docker` script that runs `exec podman "$@"` first
 on your PATH. `CT_JOBS` (default 4) limits parallel compiles: a podman machine drops

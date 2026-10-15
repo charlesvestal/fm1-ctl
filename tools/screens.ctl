@@ -60,6 +60,15 @@ tap EDIT
 spin K1 -8
 wait 300
 shot screen-setup.png
+# Touch (on by default): velocity from the keys, aftertouch per note, a key held and pressed
+turn SELECT 1
+wait 1300
+key 4 down 96 55
+wait 700
+shot screen-touch.png
+key 4 up
+wait 50
+turn SELECT -1
 # ENV tapped twice: sustain locked
 tap HOME
 wait 1300

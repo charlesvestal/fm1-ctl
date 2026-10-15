@@ -28,10 +28,18 @@ const quiet = peak;
 ex.web_keys(1 << 7); run(200); const sounding = peak; ex.web_keys(0); run(20);   // C4
 ex.web_enc(3, 1); run(20);                                       // KNOB 1: CC 74 64 -> 65
 ex.web_midi_in(2, (0x9 | 0x90 << 8 | 60 << 16 | 99 << 24) >>> 0); run(10);   // the TRS jack: thru to USB
+// Touch on (Setup, SELECT, KNOB 1: Keys): a key that lands at 40 plays at about 40
+ex.web_buttons(1 << 4); run(10); ex.web_buttons(0); run(10);   // EDIT
+ex.web_enc(0, 1); run(10); ex.web_enc(3, 1); run(10);
+const mark = sent.length;
+ex.web_key(7, 40, 0); run(20); ex.web_key(7, 0, 0); run(20);
+const touchVel = sent.slice(mark).map((p) => [(p >>> 8) & 0xFF, (p >>> 16) & 0xFF, (p >>> 24) & 0xFF])
+  .filter(([s, n, v]) => s === 0x90 && n === 60 && v).map(([, , v]) => v)[0] ?? 0;
+ex.web_enc(3, -1); run(10); ex.web_buttons(1 << 6); run(10); ex.web_buttons(0); run(10);   // Touch off; HOME
 const want = ["90 3c 64", "80 3c 00", "b0 4a 41", "90 3c 63"];
 const got = sent.map(hex);
 ex.web_master(0); run(200); run(20);
 const muted = peak;
-console.log("sent", got.join(", "), "| blits", ex.web_blits(), "| peak at rest", quiet, "playing", sounding.toFixed(3), "MASTER down", muted);
-const ok = want.every((w) => got.includes(w)) && ex.web_blits() > 3 && quiet === 0 && sounding > 0.01 && muted === 0;
+console.log("sent", got.join(", "), "| blits", ex.web_blits(), "| peak at rest", quiet, "playing", sounding.toFixed(3), "MASTER down", muted, "| touch velocity", touchVel);
+const ok = want.every((w) => got.includes(w)) && ex.web_blits() > 3 && quiet === 0 && sounding > 0.01 && muted === 0 && touchVel >= 35 && touchVel <= 45;
 process.exit(ok ? 0 : 1);

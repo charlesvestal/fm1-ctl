@@ -42,6 +42,8 @@ void project_defaults(void)
     proj.arp_oct = 1;
     proj.seq_ch = 9;                             /* channel 10 */
     proj.glow = 1;
+    proj.touch = 1;                              /* velocity from the keys */
+    proj.at_mode = AT_POLY;                      /* and aftertouch, per note */
     for (k = 0; k < NTRACKS; k++) {
         track_t *t = &proj.trk[k];
         t->steps = TRK_DEFAULT[k][0];
@@ -62,7 +64,8 @@ static int project_valid(void)
         proj.human > 40u || proj.tempo < 40u || proj.tempo > 240u || proj.clock >= NCLK || proj.arp_on > 1u ||
         proj.arp_mode >= NARP || proj.arp_rate >= NRATE || proj.arp_oct < 1u || proj.arp_oct > 3u ||
         proj.arp_latch > 1u || proj.seq_ch > 15u || proj.master_cc > 119u || proj.glow > 2u ||
-        proj.sound >= NSOUND || proj.in_mute > 1u)
+        proj.sound >= NSOUND || proj.in_mute > 1u || proj.touch > 1u || proj.at_mode >= NAT ||
+        proj.vel_curve < -5 || proj.vel_curve > 5 || proj.at_sens < -5 || proj.at_sens > 5)
         return 0;
     for (b = 0; b < NBANKS; b++)
         for (k = 0; k < NKNOBS; k++)

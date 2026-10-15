@@ -1,4 +1,5 @@
 # chromatic keys, octave, channel, program, knob banks, sustain, panic, MASTER as a controller
+fixed
 wait 300
 shot boot.png
 key 0 down

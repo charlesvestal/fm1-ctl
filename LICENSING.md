@@ -51,5 +51,5 @@ independent firmware; it is not affiliated with, endorsed by or supported by any
 
 ## Radio
 
-Ctl enables the Bluetooth radio only when asked (the Bluetooth page), never at start, and only as a
-BLE peripheral (BLE MIDI).
+The USB-only build never enables the radio. The Bluetooth build enables it at start (not after a crashed
+Bluetooth run; then only when SAVE is held on the Setup page), and only as a BLE peripheral (BLE MIDI).

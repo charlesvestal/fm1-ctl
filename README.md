@@ -1,7 +1,7 @@
 # CTL-1 for the M-VAVE FM-1
 
-CTL-1 turns the M-VAVE FM-1 into a MIDI controller. The keys play notes, in any scale with its chords
-under the black keys; the knobs send controllers in four banks; an arpeggiator and a four-track
+CTL-1 turns the M-VAVE FM-1 into a MIDI controller. The keys play notes, with velocity and aftertouch read
+from the keys themselves, in any scale with its chords under the black keys; the knobs send controllers in four banks; an arpeggiator and a four-track
 Euclidean drum sequencer run on its clock. Everything goes out over USB, MIDI from the TRS jack is passed
 along, and the FM-1 plays it all on its own General MIDI sounds too, so it works with nothing connected.
 
@@ -32,6 +32,16 @@ installer can reach.
 
 The [manual](https://charlesvestal.github.io/fm1-ctl/manual/) has the rest.
 
+### Screen reader
+
+CTL-1 tells the [FM-1 Screen Reader](https://charlesvestal.github.io/fm1-reader/) what its screen shows,
+over USB: the page and its knobs, a knob's value as it turns (a controller with its name, "CC 74 cutoff
+64"), the channel and the program, the note or the chord a key plays ("D minor"), the Sequencer's steps
+and mutes, the Touch settings and a key's velocity, play and stop, and what each button did. Open the
+page in Chrome with the FM-1 plugged in; it speaks with its own voice, or hands the text to your
+computer's screen reader. The reader's messages stay between it and CTL-1: they are never passed on to
+MIDI out or Bluetooth.
+
 ## Two builds
 
 The released firmware is the **USB-only build**: USB MIDI and the TRS jack's MIDI in. This repository
@@ -42,13 +52,19 @@ shared, and anyone may build the Bluetooth one for themselves. See [LICENSING.md
 
 ## Building and testing
 
-The toolchain is the same as X0X's (see [BUILDING.md](BUILDING.md)):
+The toolchain and prerequisites are in [BUILDING.md](BUILDING.md):
 
 ```
 sh tests/run_tests.sh                          # host tests, the app in the simulator, the web build
 ./build.sh --no-ble                            # build/ctl-usb.fwsc: the USB-only build
 ./build.sh                                     # build/ctl.fwsc: with Bluetooth (needs the AC79 SDK's BT libraries)
 python3 tools/fm1_install.py build/ctl-usb.fwsc    # install it over USB
+```
+
+Build and flash the Bluetooth build in one go (for yourself only, see [BUILDING.md](BUILDING.md#the-bluetooth-build)):
+
+```
+./build.sh && python3 tools/fm1_install.py build/ctl.fwsc --yes
 ```
 
 `build/host/ctl_host SCRIPT OUTDIR` runs the whole app on a computer from a script

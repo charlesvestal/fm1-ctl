@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CTL-1 in the browser</title>
+<title>Emulator · CTL-1</title>
 <meta name="description" content="CTL-1, a MIDI controller firmware for the M-VAVE FM-1, in your browser: the same code the FM-1 runs, sending to your MIDI ports.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
 <style>
-:root { --ground: #fbf8f1; --ink: #1e2b5a; --muted: #5d6585; --rule: #ddd4c2; --accent: #e5482e; --cool: #d9a21b; --card: #efe9dc; color-scheme: light; }
+:root { --ground: #fbf8f1; --ink: #1e2b5a; --muted: #5d6585; --rule: #ddd4c2; --accent: #e5482e; --cool: #d9a21b; --card: #efe9dc; color-scheme: light;
+        --accent-ink: #c23a22; }   /* the vermilion as text: 4.5:1 on the paper */
 /* CTL-1's paper and ink, as the site and its screen; the FM-1 itself stays black */
 body { background: var(--ground); color: var(--ink); margin: 0; padding-inline: 16px; padding-block: 28px 48px;
        font: 400 16px/1.55 "Barlow", "Helvetica Neue", Arial, sans-serif; }
@@ -18,13 +19,20 @@ header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1.2re
 h1 { font: 700 2rem/1.1 "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0; }
 header p { margin: 0; color: var(--muted); }
 header nav { margin-left: auto; display: flex; gap: 1rem; }
-header nav a[aria-current] { text-decoration: none; color: var(--accent); }
+header nav a[aria-current] { text-decoration: none; color: var(--accent-ink); }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
-.device { position: relative; width: 100%; aspect-ratio: 1000 / 640; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+/* the FM-1 is never drawn narrower than 440 px: its buttons and keys stay 24 px apart (WCAG 2.5.8); on a
+   narrower phone the drawing scrolls sideways in its own box, not the page */
+.device-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
+.device { position: relative; width: 100%; min-width: 440px; aspect-ratio: 1000 / 640; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 .device svg { pointer-events: none; }
-.hit { position: absolute; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 12px; }
+.controls, .controls > div { position: absolute; inset: 0; pointer-events: none; }
+.controls:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; border-radius: 4.4% / 6.9%; }
+.hit { position: absolute; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 12px; pointer-events: auto; }
 .hit.knob { cursor: ns-resize; border-radius: 50%; }
-.hit:focus-visible { outline: 2px solid #f28a5a; outline-offset: 2px; }
+.hit:focus-visible { outline: 3px solid #f28a5a; outline-offset: 2px; }
 .device svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .device canvas { position: absolute; left: 31.8%; top: 9.6875%; width: 20%; height: 31.25%; image-rendering: pixelated; background: #000; border-radius: 2px; }
 .ctl { cursor: pointer; }
@@ -50,11 +58,21 @@ a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thi
 .bar { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; align-items: center; margin: .9rem 0 0; color: var(--muted); font-size: .92rem; }
 .bar button { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: .3em .8em; cursor: pointer; }
 .bar .cpu { font-variant-numeric: tabular-nums; }
+.bar .num { display: inline-block; min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 .help h2 { font: 600 1.1rem "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0 0 .3rem; }
 .help { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem 2rem; margin: 1.6rem 0 0; }
 .help h2 { font: 600 1.1rem "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0 0 .3rem; }
 .help p, .help ul { margin: 0; color: var(--muted); max-width: 60ch; }
 .help ul { padding-left: 1.1rem; }
+.reader { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; align-items: center; margin: .7rem 0 0; color: var(--muted); font-size: .92rem; }
+.reader fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .2rem 1rem; align-items: center; }
+.reader legend { float: left; margin-right: .6rem; padding: 0; color: var(--ink); font-weight: 600; }
+.reader button { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: .3em .8em; cursor: pointer; }
+.reader button:disabled { opacity: .5; cursor: default; }
+.said { flex-basis: 100%; margin: 0; color: var(--ink); min-height: 1.55em; overflow-wrap: anywhere; }
+.said b { color: var(--muted); font-weight: 600; margin-right: .4em; }
+.bar button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+@media (prefers-reduced-motion: reduce) { .btnface, .keyface { transition: none; } html { scroll-behavior: auto; } }
 kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 0 .3em; color: var(--ink); }
 </style>
 </head>
@@ -63,23 +81,51 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 <header>
   <h1><a href="../" style="color:inherit;text-decoration:none" title="CTL-1 home">CTL-1</a></h1>
   <p>a MIDI controller for the FM-1, in the browser: the same code the FM-1 runs</p>
-  <nav><a href="../emu/" aria-current="page">Emulator</a><a href="../install/">Install</a><a href="../manual/">Manual</a><a href="https://github.com/charlesvestal/fm1-ctl">Source</a></nav>
+  <nav aria-label="CTL-1"><a href="../emu/" aria-current="page">Emulator</a><a href="../install/">Install</a><a href="../manual/">Manual</a><a href="https://github.com/charlesvestal/fm1-ctl">Source</a></nav>
 </header>
 
 <p class="turn">Turn your phone sideways for bigger controls.</p>
+<div class="device-wrap">
 <div class="device" id="device">
-  <svg id="panel" viewBox="0 0 1000 640" role="application" aria-label="The FM-1: knobs, buttons, screen and keys"></svg>
-  <canvas id="screen" width="240" height="240" aria-label="The FM-1 screen"></canvas>
-  <div class="start" id="start"><button id="go">Switch on</button></div>
+  <svg id="panel" viewBox="0 0 1000 640" aria-hidden="true" focusable="false"></svg>
+  <canvas id="screen" width="240" height="240" role="img" aria-label="The FM-1's screen. What it shows is read out: see The screen in words, below the FM-1."></canvas>
+  <!-- the controls, for the mouse, touch, the keyboard and screen readers: invisible targets over the drawing -->
+  <div class="controls" id="controls" tabindex="0" role="group" aria-label="The FM-1" aria-describedby="panel-keys" inert>
+    <div role="group" aria-label="Knobs" id="g-knobs"></div>
+    <div role="group" aria-label="Buttons" id="g-buttons"></div>
+    <div role="group" aria-label="Keys, F3 to G5" id="g-keys"></div>
+  </div>
+  <p id="panel-keys" hidden>Tab moves between its knobs, buttons and keys. Space or Enter presses the one with focus;
+    the arrow keys turn a knob. While the FM-1 has focus, the computer keyboard plays it: see Keyboard and screen reader, below.</p>
+  <div class="start" id="start"><button id="go" type="button">Switch on</button></div>
+</div>
 </div>
 
 <div class="bar">
-  <span id="status">Off.</span>
+  <span id="status" role="status">Off.</span>
+  <button id="mute" type="button" aria-pressed="false">Mute</button>
   <label>MIDI out <select id="midiout"><option value="">none</option></select></label>
   <label>MIDI in <select id="midiin"><option value="">none</option></select></label>
+  <span id="midinote"></span>
+  <label>Keyboard velocity <input id="kvel" type="range" min="1" max="127" value="100"> <span class="num" id="kvelv">100</span></label>
   <span class="cpu" id="cpu"></span>
+  <label><input id="shortcuts" type="checkbox" checked> Keyboard shortcuts</label>
   <button id="reset" type="button" title="Forget your settings and start again from the factory settings">Factory reset</button>
 </div>
+
+<section class="reader" aria-labelledby="h-reader">
+  <h2 id="h-reader" class="sr">The screen in words</h2>
+  <fieldset>
+    <legend>The screen in words</legend>
+    <label><input type="radio" name="reader" value="sr" checked> for my screen reader</label>
+    <label><input type="radio" name="reader" value="voice"> in this page's voice</label>
+    <label><input type="radio" name="reader" value="off"> off</label>
+  </fieldset>
+  <button id="where" type="button" disabled>Read the whole screen</button>
+  <p class="said" aria-hidden="true"><b>Said</b><span id="said"></span></p>
+  <div id="live-a" class="sr" aria-live="assertive" aria-atomic="true"></div>
+  <div id="live-p" class="sr" aria-live="polite" aria-atomic="true"></div>
+</section>
 
 <section class="help">
   <div>
@@ -88,6 +134,7 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
       <li><b>Keys</b> play notes, F3 to G5, and the FM-1's own General MIDI sounds play them. <b>OCT−</b> / <b>OCT+</b>: an octave.</li>
       <li><b>ENV</b> held: sustain; tap it twice to lock it. <b>LFO</b> held: the mod wheel. <b>REC</b>: all notes off.</li>
       <li><b>ALGORITHM</b> MIDI channel, <b>PRESETS</b> program change (the sound follows), <b>MASTER</b> volume.</li>
+      <li>Velocity and aftertouch from the keys: on the <b>Setup</b> page, turn <b>SELECT</b> for Touch.</li>
     </ul>
   </div>
   <div>
@@ -114,11 +161,20 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
     </ul>
   </div>
   <div>
-    <h2>Mouse, touch, keyboard</h2>
+    <h2>Mouse and touch</h2>
     <ul>
       <li>Drag a knob up or down, or scroll over it. <kbd>Shift</kbd>-click a button to hold it.</li>
-      <li>Notes like a piano: <kbd>A</kbd> is the lowest key, <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … up to <kbd>'</kbd>.</li>
-      <li><kbd>Z</kbd> / <kbd>X</kbd> octave, <kbd>Shift</kbd> sustain, <kbd>1</kbd> ARP, <kbd>2</kbd> FX, <kbd>Space</kbd> PLAY, <kbd>Backspace</kbd> REC, <kbd>Esc</kbd> HOME, <kbd>↑</kbd> <kbd>↓</kbd> SELECT.</li>
+      <li>Keys: click lower for more velocity, drag down for aftertouch. A pen's own pressure works too.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Keyboard and screen reader</h2>
+    <ul>
+      <li><kbd>Tab</kbd> moves through the FM-1's knobs, buttons and keys. <kbd>Space</kbd> or <kbd>Enter</kbd> presses the one with focus, for as long as you hold it; <kbd>Shift</kbd>+<kbd>Space</kbd> keeps a button held until you press it again.</li>
+      <li>A knob turns with the arrow keys, <kbd>Page Up</kbd> / <kbd>Page Down</kbd> faster. On the keys, <kbd>←</kbd> <kbd>→</kbd> move to the next key.</li>
+      <li>While the FM-1 has focus, and <b>Keyboard shortcuts</b> is on, the letters play it like a piano: <kbd>A</kbd> is the lowest key, <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … up to <kbd>'</kbd>, at the velocity set below the FM-1.</li>
+      <li>Also: <kbd>Z</kbd> / <kbd>X</kbd> octave, <kbd>Q</kbd> sustain (ENV), <kbd>1</kbd> ARP, <kbd>2</kbd> FX, <kbd>Space</kbd> PLAY (when no control has focus), <kbd>Backspace</kbd> REC, <kbd>Esc</kbd> HOME, <kbd>↑</kbd> <kbd>↓</kbd> SELECT.</li>
+      <li>The screen is read out as it changes, by your own screen reader or by this page's voice (eSpeak NG, GPL-3.0), in CTL-1's own words: <a href="https://charlesvestal.github.io/fm1-reader/">the FM-1 screen reader</a>, as on the FM-1 itself. Each button and key also says whether its light is on.</li>
     </ul>
   </div>
 </section>
@@ -153,13 +209,13 @@ function text(parent, x, y, s, size, fill = LABEL, weight = 600) {
 el("rect", { x: 4, y: 4, width: 992, height: 632, rx: 44, fill: BODY });
 const knobs = {};
 function knob(x, y, r, label, role) {
-  const g = el("g", { class: "ctl knob", tabindex: 0, role: "slider", "aria-label": label });
+  const g = el("g", { class: "ctl knob" });
   el("circle", { cx: x, cy: y, r: r + 5, fill: TRAY }, g);
   el("circle", { cx: x, cy: y, r, fill: KNOB, stroke: "#44474c", "stroke-width": 2 }, g);
   const ind = el("line", { x1: x, y1: y - r + 5, x2: x, y2: y - r + 15, stroke: LABEL, "stroke-width": 3, "stroke-linecap": "round" }, g);
   text(g, x, y - r - 12, label, 17);
   el("circle", { cx: x, cy: y, r: r + 14, fill: "transparent" }, g);
-  knobs[label] = { g, ind, x, y, angle: 0, role };
+  knobs[label] = { g, ind, x, y, angle: 0, role, label };
   return knobs[label];
 }
 knob(105, 100, 24, "MASTER", "master");
@@ -170,11 +226,11 @@ for (let i = 0; i < 4; i++) knob(610 + i * 104, 100, 22, `KNOB${i + 1}`, ENC[`KN
 
 const buttons = {};
 function button(x, y, w, h, label, two) {
-  const g = el("g", { class: "ctl", role: "button", "aria-label": label });
+  const g = el("g", { class: "ctl" });
   el("rect", { x, y, width: w, height: h, rx: 9, fill: BTNC, stroke: "#4a4d52", "stroke-width": 1.5, class: "btnface" }, g);
   if (two) { text(g, x + w / 2, y + h / 2 - 1, label, 12); text(g, x + w / 2, y + h / 2 + 12, two, 12); }
   else text(g, x + w / 2, y + h / 2 + 5, label, 15);
-  buttons[label] = { g, bit: BTN[label] };
+  buttons[label] = { g, bit: BTN[label], label };
 }
 el("rect", { x: 58, y: 258, width: 210, height: 58, rx: 14, fill: TRAY });
 button(72, 268, 82, 38, "OCT-"); button(170, 268, 82, 38, "OCT+");
@@ -191,14 +247,14 @@ const keys = [];
   el("rect", { x: x0, y: y0, width: w, height: h, rx: 18, fill: TRAY });
   const pitch = (w - 24) / 16, kw = pitch * 0.78;
   for (let i = 0; i < 16; i++) {
-    const g = el("g", { class: "ctl", role: "button", "aria-label": `white key ${i + 1}` });
+    const g = el("g", { class: "ctl" });
     el("rect", { x: x0 + 12 + i * pitch + (pitch - kw) / 2, y: y0 + h * 0.43, width: kw, height: h * 0.52, rx: kw / 2, fill: KEY_W, class: "keyface white" }, g);
-    keys[WHITE_K[i]] = { g };
+    keys[WHITE_K[i]] = { g, white: i + 1 };
   }
   BLACK_AFTER.forEach((a, k) => {
-    const g = el("g", { class: "ctl", role: "button", "aria-label": `black key ${k + 1}` });
+    const g = el("g", { class: "ctl" });
     el("rect", { x: x0 + 12 + (a + 1) * pitch - kw / 2, y: y0 + h * 0.06, width: kw, height: h * 0.33, rx: kw / 2, fill: KEY_B, class: "keyface black" }, g);
-    keys[BLACK_K[k]] = { g };
+    keys[BLACK_K[k]] = { g, black: k + 1 };
   });
 })(36, 340, 928, 270);
 
@@ -207,16 +263,27 @@ const keys = [];
 // over it: browsers (iOS Safari above all) honour touch-action and touchstart on HTML elements but
 // not on SVG ones, so the controls keep their touches while a finger anywhere else on the device
 // scrolls the page natively.
-const device = document.getElementById("device");
-function hit(c, cls) {
+// Each target is also what the keyboard and a screen reader use: a knob is a slider (MASTER, which has a
+// value) or a button turned with the arrow keys (the endless encoders); a button or a key is a button,
+// named with its printed label or its note, its light in its name, described in a hidden line.
+const device = document.getElementById("device"), controls = document.getElementById("controls");
+let nDesc = 0;
+function hit(c, group, cls, attrs, desc) {
   const b = c.g.getBBox(), d = document.createElement("div");
   d.className = "hit" + (cls ? " " + cls : "");
   Object.assign(d.style, { left: `${b.x / 10}%`, top: `${b.y / 6.4}%`, width: `${b.width / 10}%`, height: `${b.height / 6.4}%` });
-  for (const a of ["role", "aria-label", "tabindex"]) if (c.g.hasAttribute(a)) { d.setAttribute(a, c.g.getAttribute(a)); c.g.removeAttribute(a); }
-  if (c.g.hasAttribute("aria-description")) { d.title = c.g.getAttribute("aria-description"); d.setAttribute("aria-description", d.title); }
-  c.g.setAttribute("aria-hidden", "true");
+  for (const [k, v] of Object.entries(attrs)) d.setAttribute(k, v);
+  c.name = attrs["aria-label"];
+  if (desc) {
+    const t = document.createElement("span");
+    t.id = "desc" + nDesc++;
+    t.hidden = true;
+    t.textContent = desc;
+    group.appendChild(t);
+    d.setAttribute("aria-describedby", t.id);
+  }
   d.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
-  device.insertBefore(d, document.getElementById("start"));
+  group.appendChild(d);
   c.hit = d;
 }
 // what each control does, on hover (the Buttons list below says the same)
@@ -226,10 +293,33 @@ const TIP = { FX: "Next knob bank (A to D); hold: set their controller numbers",
   SELECT: "The page's pages: banks on Play, tracks on the Sequencer", ALGORITHM: "MIDI channel", PRESETS: "Program change (the sound follows)",
   MASTER: "Volume, or a controller (Sound page)",
   KNOB1: "The page's first value", KNOB2: "The page's second value", KNOB3: "The page's third value", KNOB4: "The page's fourth value" };
-for (const [n, c] of [...Object.entries(buttons), ...Object.entries(knobs)]) if (TIP[n]) c.g.setAttribute("aria-description", TIP[n]);
-for (const k of Object.values(knobs)) hit(k, "knob");
-for (const b of Object.values(buttons)) hit(b);
-keys.forEach((k) => hit(k));
+const gKnobs = document.getElementById("g-knobs"), gButtons = document.getElementById("g-buttons"), gKeys = document.getElementById("g-keys");
+for (const k of Object.values(knobs)) {
+  const name = k.label.replace(/^KNOB(\d)$/, "KNOB $1");
+  if (k.role === "master") {
+    hit(k, gKnobs, "knob", { role: "slider", tabindex: 0, "aria-label": name, "aria-valuemin": 0, "aria-valuemax": 100 },
+        `${TIP[k.label]}. The arrow keys turn it, Page Up and Page Down faster, Home and End all the way.`);
+  } else {
+    hit(k, gKnobs, "knob", { role: "button", tabindex: 0, "aria-label": /^KNOB/.test(k.label) ? name : `${name} knob` },
+        `${TIP[k.label]}. An endless knob: turn it with the arrow keys, Page Up and Page Down 5 steps at a time.`);
+  }
+  k.hit.title = TIP[k.label];
+}
+const SAY = { "OCT-": "OCT minus", "OCT+": "OCT plus", PLAY: "PLAY / STOP" };
+for (const n of [...ROW1, ...ROW2, "OCT-", "OCT+"]) {
+  const b = buttons[n];
+  hit(b, gButtons, "", { role: "button", tabindex: 0, "aria-label": SAY[n] || n, "aria-pressed": "false" },
+      `${TIP[n]}. Space or Enter presses it, for as long as you hold it; Shift+Space keeps it held (pressed) until you press it again.`);
+  b.hit.title = TIP[n];
+}
+// the keys by their notes, as they start (F3 to G5; OCT and the scales change what they play)
+const NOTE = ["C", "C sharp", "D", "D sharp", "E", "F", "F sharp", "G", "G sharp", "A", "A sharp", "B"];
+keys.forEach((k, i) => {
+  const m = 53 + i;
+  hit(k, gKeys, "", { role: "button", tabindex: i ? -1 : 0, "aria-label": `${NOTE[m % 12]} ${Math.floor(m / 12) - 1} key` },
+      `${k.white ? `White key ${k.white}` : `Black key ${k.black}, a chord with a scale`}. Space or Enter plays it, for as long as you hold it, ` +
+      `at the keyboard velocity. Left and Right arrows: the next key.`);
+});
 
 // ---------------------------------------------------------------- state and input
 let node = null, btnMask = 0, keyMask = 0, latched = 0, master = 3072;   // MASTER three-quarters up: sound at once
@@ -243,14 +333,24 @@ function syncButtons() {
     b.g.classList.toggle("held", !!(m & (1 << b.bit)));
     b.g.classList.toggle("latched", !!(latched & (1 << b.bit)));
     b.hit.classList.toggle("latched", !!(latched & (1 << b.bit)));
-    b.hit.setAttribute("aria-pressed", m & (1 << b.bit) ? "true" : "false");
+    b.hit.setAttribute("aria-pressed", latched & (1 << b.bit) ? "true" : "false");
   }
 }
+// each key as the firmware senses it: the velocity it landed with and how hard it is pressed now (0..1000;
+// keys 0..19 only: the top seven have no converter on the FM-1)
+const ANALOG = 20, sentKey = [];
 function syncKeys() {
-  let m = 0;
-  for (const k of keyHeldBy.values()) m |= 1 << k;
-  if (m !== keyMask) { keyMask = m; send({ type: "keys", mask: m }); }
-  keys.forEach((k, i) => k.g.classList.toggle("held", !!(m & (1 << i))));
+  keys.forEach((k, i) => {
+    let h = null;
+    for (const x of keyHeldBy.values()) if (x.key === i) { h = x; break; }
+    const vel = h ? h.vel : 0, press = h && i < ANALOG ? Math.round(h.press * 1000) : 0;
+    const was = sentKey[i] || { vel: 0, press: 0 };
+    if (!!vel !== !!was.vel || (vel && press !== was.press)) {
+      sentKey[i] = { vel, press };
+      send({ type: "key", key: i, vel, press });
+    }
+    k.g.classList.toggle("held", !!vel);
+  });
 }
 
 for (const b of Object.values(buttons)) {
@@ -264,14 +364,28 @@ for (const b of Object.values(buttons)) {
     syncButtons();
   });
 }
+// a key: where it is pressed is how hard it lands (lower is harder); dragging down from there presses
+// harder (a pen's own pressure too). Velocity and aftertouch count only with Touch on (Setup)
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
 keys.forEach((k, i) => {
   k.hit.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    k.hit.setPointerCapture(e.pointerId);
-    keyHeldBy.set("p" + e.pointerId, i);
+    try { k.hit.setPointerCapture(e.pointerId); } catch { /* a pointer that is already gone */ }
+    const r = k.hit.getBoundingClientRect();
+    const vel = Math.max(1, Math.min(127, Math.round(1 + 126 * clamp01(((e.clientY - r.top) / r.height - 0.1) / 0.8))));
+    keyHeldBy.set("p" + e.pointerId, { key: i, vel, press: 0, y0: e.clientY, h: r.height });
     syncKeys();
   });
+  k.hit.addEventListener("pointermove", (e) => {
+    const h = keyHeldBy.get("p" + e.pointerId);
+    if (!h || h.key !== i) return;
+    let p = clamp01((e.clientY - h.y0) / (h.h * 0.6));
+    if (e.pointerType === "pen") p = Math.max(p, clamp01((e.pressure - 0.3) / 0.6));
+    if (Math.abs(p - h.press) >= 0.01 || (p === 0) !== (h.press === 0)) { h.press = p; syncKeys(); }
+  });
 });
+const kvel = document.getElementById("kvel"), kvelv = document.getElementById("kvelv");
+kvel.addEventListener("input", () => { kvelv.textContent = kvel.value; });
 function pointerUp(e) {
   const id = "p" + e.pointerId;
   if (btnHeldBy.delete(id)) syncButtons();
@@ -290,6 +404,7 @@ function turn(k, n) {
     master = Math.max(0, Math.min(4096, master + n * 64));
     k.angle = -135 + 270 * master / 4096;
     send({ type: "master", value: master });
+    masterValue();
   } else {
     k.angle = (k.angle + n * 18) % 360;
     send({ type: "enc", role: k.role, n });
@@ -323,41 +438,105 @@ for (const k of Object.values(knobs)) {
     if (n) { wheel -= n * 25; turn(k, n); }
   }, { passive: false });
   k.hit.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowUp" || e.key === "ArrowRight") { turn(k, 1); e.preventDefault(); e.stopPropagation(); }
-    if (e.key === "ArrowDown" || e.key === "ArrowLeft") { turn(k, -1); e.preventDefault(); e.stopPropagation(); }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const big = k.role === "master" ? 8 : 5;
+    const n = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: big, PageDown: -big }[e.key] ??
+              (k.role === "master" ? { Home: -64, End: 64 }[e.key] : undefined);
+    if (n === undefined) return;
+    e.preventDefault();
+    e.stopPropagation();
+    turn(k, n);
   });
+}
+function masterValue() {
+  const pct = Math.round(100 * master / 4096);
+  knobs.MASTER.hit.setAttribute("aria-valuenow", pct);
+  knobs.MASTER.hit.setAttribute("aria-valuetext", `${pct} percent`);
 }
 
 knobs.MASTER.angle = -135 + 270 * master / 4096;             // drawn where it starts
 drawKnob(knobs.MASTER);
+masterValue();
 
 const KEYMAP = {};
 // a piano on the computer keyboard, from the lowest key (F): white keys on the home row, black above
 ["KeyA", "KeyW", "KeyS", "KeyE", "KeyD", "KeyR", "KeyF", "KeyG", "KeyY", "KeyH", "KeyU", "KeyJ", "KeyK", "KeyO", "KeyL", "KeyP",
  "Semicolon", "BracketLeft", "Quote"].forEach((c, i) => KEYMAP[c] = { key: i });
-Object.assign(KEYMAP, { Space: { btn: BTN.PLAY }, Backspace: { btn: BTN.REC }, ShiftLeft: { btn: BTN.ENV }, ShiftRight: { btn: BTN.ENV },
+// (sustain on Q, not Shift: Shift+Tab and Shift+Space would tap ENV, and two taps lock it)
+Object.assign(KEYMAP, { Space: { btn: BTN.PLAY }, Backspace: { btn: BTN.REC }, KeyQ: { btn: BTN.ENV },
                         Digit1: { btn: BTN.ARP }, Digit2: { btn: BTN.FX }, Escape: { btn: BTN.HOME },
                         KeyZ: { btn: BTN["OCT-"] }, KeyX: { btn: BTN["OCT+"] } });
-addEventListener("keydown", (e) => {
-  if (!node || e.metaKey || e.ctrlKey || e.altKey) return;
+// On a control with focus, Space or Enter presses it ("f": held while the key is down). While the FM-1 has
+// focus (the panel or one of its controls) and Keyboard shortcuts is on, the keyboard plays it ("k"):
+// single letters only there, so they never get in the way of the rest of the page or a screen reader.
+const shortcuts = document.getElementById("shortcuts");
+try { const v = localStorage.getItem("ctl-emu-shortcuts"); if (v !== null) shortcuts.checked = v === "1"; } catch { /* private */ }
+shortcuts.addEventListener("change", () => { try { localStorage.setItem("ctl-emu-shortcuts", shortcuts.checked ? "1" : "0"); } catch { /* private */ } });
+const isPress = (e) => e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter";
+for (const b of Object.values(buttons)) {
+  b.hit.addEventListener("keydown", (e) => {
+    if (!isPress(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat) return;
+    if (e.shiftKey) { latched ^= 1 << b.bit; syncButtons(); return; }
+    if (latched & (1 << b.bit)) { latched &= ~(1 << b.bit); syncButtons(); return; }
+    btnHeldBy.set("f" + e.code, b.bit);
+    syncButtons();
+  });
+}
+function focusKey(i) {
+  keys.forEach((k, j) => k.hit.tabIndex = j === i ? 0 : -1);
+  keys[i].hit.focus();
+}
+keys.forEach((k, i) => {
+  k.hit.addEventListener("focus", () => keys.forEach((x, j) => x.hit.tabIndex = j === i ? 0 : -1));
+  k.hit.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (isPress(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat) { keyHeldBy.set("f" + e.code, { key: i, vel: +kvel.value, press: 0 }); syncKeys(); }
+      return;
+    }
+    const to = { ArrowLeft: i - 1, ArrowRight: i + 1, Home: 0, End: keys.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    e.stopPropagation();
+    focusKey(Math.max(0, Math.min(keys.length - 1, to)));
+  });
+});
+controls.addEventListener("keydown", (e) => {
+  if (!node || !shortcuts.checked || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.code === "ArrowUp" || e.code === "ArrowDown") { turn(knobs.SELECT, e.code === "ArrowUp" ? 1 : -1); e.preventDefault(); return; }
+  if (e.code === "Space" && e.target !== controls) return;           // Space on a knob: nothing
   const m = KEYMAP[e.code];
   if (!m) return;
   e.preventDefault();
   if (e.repeat) return;
-  if (m.key !== undefined) { keyHeldBy.set("k" + e.code, m.key); syncKeys(); }
+  if (m.key !== undefined) { keyHeldBy.set("k" + e.code, { key: m.key, vel: +kvel.value, press: 0 }); syncKeys(); }
   else { btnHeldBy.set("k" + e.code, m.btn); syncButtons(); }
 });
-addEventListener("keyup", (e) => {
-  const id = "k" + e.code;
-  if (keyHeldBy.delete(id)) syncKeys();
-  if (btnHeldBy.delete(id)) syncButtons();
+controls.addEventListener("keyup", (e) => {
+  let changed = false;
+  for (const id of ["k" + e.code, "f" + e.code]) {
+    if (keyHeldBy.delete(id)) { syncKeys(); changed = true; }
+    if (btnHeldBy.delete(id)) { syncButtons(); changed = true; }
+  }
+  if (changed) e.preventDefault();
 });
-addEventListener("blur", () => {
-  for (const id of [...btnHeldBy.keys()]) if (id[0] === "k") btnHeldBy.delete(id);
-  for (const id of [...keyHeldBy.keys()]) if (id[0] === "k") keyHeldBy.delete(id);
+function releaseKeyboard() {
+  for (const id of [...btnHeldBy.keys()]) if (id[0] === "k" || id[0] === "f") btnHeldBy.delete(id);
+  for (const id of [...keyHeldBy.keys()]) if (id[0] === "k" || id[0] === "f") keyHeldBy.delete(id);
   syncButtons(); syncKeys();
-});
+}
+controls.addEventListener("focusout", (e) => { if (!controls.contains(e.relatedTarget)) releaseKeyboard(); });
+addEventListener("blur", releaseKeyboard);
+// a click or a touch on a control gives the FM-1 focus (not the control: Space stays PLAY), so the
+// keyboard plays it after the mouse, as before
+controls.addEventListener("pointerdown", () => {
+  if (!controls.contains(document.activeElement)) controls.focus({ preventScroll: true });
+}, true);
 
 // ---------------------------------------------------------------- screen and lights
 const ctx = document.getElementById("screen").getContext("2d");
@@ -373,14 +552,31 @@ function drawScreen(fb) {
   }
   ctx.putImageData(img, 0, 0);
 }
+// a light in its control's name ("ARP, lit"): once it has stayed so for 0.4 s; one changing more than
+// twice a second is "blinking" (a step going by is not said at all)
+function ledName(c, state, t) {
+  const L = c.led || (c.led = { cur: "", shown: "", since: 0, flips: [] });
+  if (state !== L.cur) { L.cur = state; L.since = t; L.flips.push(t); }
+  while (L.flips.length && t - L.flips[0] > 2000) L.flips.shift();
+  const show = L.flips.length >= 4 ? "blinking" : t - L.since >= 400 ? L.cur : L.shown;
+  if (show !== L.shown) {
+    L.shown = show;
+    c.hit.setAttribute("aria-label", c.name + (show ? ", " + show : ""));
+  }
+}
 function drawLights(b, k, db = 0, dk = 0) {
+  const t = performance.now();
   for (const x of Object.values(buttons)) {
-    x.g.classList.toggle("lit", !!(b & (1 << x.bit)));
-    x.g.classList.toggle("dim", !(b & (1 << x.bit)) && !!(db & (1 << x.bit)));
+    const lit = !!(b & (1 << x.bit)), dim = !lit && !!(db & (1 << x.bit));
+    x.g.classList.toggle("lit", lit);
+    x.g.classList.toggle("dim", dim);
+    ledName(x, lit ? "lit" : dim ? "glowing" : "", t);
   }
   keys.forEach((x, i) => {
-    x.g.classList.toggle("lit", !!(k & (1 << i)));
-    x.g.classList.toggle("dim", !(k & (1 << i)) && !!(dk & (1 << i)));
+    const lit = !!(k & (1 << i)), dim = !lit && !!(dk & (1 << i));
+    x.g.classList.toggle("lit", lit);
+    x.g.classList.toggle("dim", dim);
+    ledName(x, lit ? "lit" : dim ? "glowing" : "", t);
   });
 }
 
@@ -411,7 +607,9 @@ async function switchOn() {
     const [wasm] = await Promise.all([fetch("ctl.wasm").then((r) => { if (!r.ok) throw new Error(`ctl.wasm: ${r.status}`); return r.arrayBuffer(); }),
                                       ac.audioWorklet.addModule("worklet.js")]);
     node = new AudioWorkletNode(ac, "ctl", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-    node.connect(ac.destination);
+    out = ac.createGain();
+    out.gain.value = muted ? 0 : 1;
+    node.connect(out).connect(ac.destination);
     const ready = new Promise((res) => {
       node.port.onmessage = (e) => {
         const m = e.data;
@@ -423,14 +621,18 @@ async function switchOn() {
           if (m.load !== undefined) cpu.textContent = `CTL-1 uses ${m.load}% of this computer's time`;
           if (m.store) saveStore(m.store);
         } else if (m.type === "midi") midiOut(m.pkts);
+        else if (m.type === "said") heard(m.bytes);
       };
     });
     node.port.postMessage({ type: "load", wasm, store: loadStore(), master }, [wasm]);
     await ready;
     await ac.resume();
+    controls.inert = false;
+    controls.focus();                                      // (the button that had focus is gone)
     document.getElementById("start").hidden = true;
     status.textContent = "On.";
     syncButtons(); syncKeys();
+    readerStart();
   } catch (err) {
     go.disabled = false;
     go.textContent = "Switch on";
@@ -438,9 +640,105 @@ async function switchOn() {
   }
 }
 document.getElementById("go").addEventListener("click", switchOn);
+// a visible, labelled mute (MASTER is the volume; this silences it without losing where it was)
+let out = null, muted = false;
+const muteBtn = document.getElementById("mute");
+muteBtn.addEventListener("click", () => {
+  muted = !muted;
+  muteBtn.setAttribute("aria-pressed", muted ? "true" : "false");
+  if (out) out.gain.value = muted ? 0 : 1;
+});
+
+// ---------------------------------------------------------------- the screen in words (fm1-reader)
+// The firmware's own screen reader support (announce.c, as on the FM-1 over USB): the page says HELLO
+// every 2 s through web_sysex; what it says back (web_said_buf) is its screen's text, said in CTL-1's
+// words (its words file, named in its HELLO answer) by fm1-reader's words.js, to a live region for the
+// computer's screen reader, or in this page's voice (fm1-reader's tts.js: eSpeak NG).
+const SR = [0x7d, 0x53, 0x52], HELLO = 1, BYE = 2, WHERE = 3, SAYS = 16;
+const liveA = document.getElementById("live-a"), liveP = document.getElementById("live-p"), saidEl = document.getElementById("said");
+const whereBtn = document.getElementById("where");
+const wordsLib = import("./words.js").catch(() => null);  // (built in from fm1-reader by web/emu/build.sh)
+const reader = { mode: "sr", timer: 0, words: [], ready: null, tts: null };
+try { reader.mode = localStorage.getItem("ctl-emu-reader") || "sr"; } catch { /* private */ }
+for (const r of document.querySelectorAll('input[name="reader"]')) {
+  r.checked = r.value === reader.mode;
+  r.addEventListener("change", () => setReader(r.value));
+}
+function sysex(...bytes) { send({ type: "sysex", bytes: [...SR, ...bytes] }); }
+function readerStart() {
+  whereBtn.disabled = !node || reader.mode === "off";
+  if (!node || reader.mode === "off" || reader.timer) return;
+  sysex(HELLO, 1);
+  reader.timer = setInterval(() => sysex(HELLO, 1), 2000);
+}
+function readerStop() {
+  if (reader.timer) { clearInterval(reader.timer); reader.timer = 0; sysex(BYE); }
+  if (reader.tts) reader.tts.stop();
+  whereBtn.disabled = true;
+}
+async function voice() {
+  if (!reader.tts) {
+    try { reader.tts = await (await import("./tts.js")).createTTS(); }
+    catch { liveA.textContent = "This page's voice could not start: use your screen reader."; return null; }
+  }
+  reader.tts.unlock();
+  return reader.tts;
+}
+function setReader(mode) {
+  reader.mode = mode;
+  try { localStorage.setItem("ctl-emu-reader", mode); } catch { /* private */ }
+  if (mode === "off") { readerStop(); return; }
+  if (mode !== "voice" && reader.tts) reader.tts.stop();
+  if (mode === "voice") voice().then((t) => t && t.speak("Voice on"));
+  readerStart();
+}
+whereBtn.addEventListener("click", () => sysex(WHERE));
+async function wordsFrom(link) {
+  const lib = await wordsLib;
+  if (!lib || !link) return [];
+  // this site's own copy first (the same file: a link names exact words), then the link itself
+  for (const url of ["../words/" + link.split("/").pop(), link]) {
+    try { const r = await fetch(url); if (r.ok) return lib.wordsOf(await r.json()); } catch { /* offline */ }
+  }
+  return [];
+}
+let flip = false, keeping = 0;
+async function speak(screen, flags) {
+  const lib = await wordsLib;
+  const text = lib ? lib.spoken(screen, reader.words) : screen;
+  saidEl.textContent = text;
+  if (reader.mode === "voice" && reader.tts) {
+    // a warning is heard whole: what follows waits instead of cutting it off
+    const p = reader.tts.speak(text, { interrupt: !!(flags & 1) && !keeping });
+    if (flags & 2) { keeping++; p.then(() => keeping--); }
+  } else if (reader.mode === "sr") {
+    // the same words twice in a row are not read again by some screen readers: alternate the text
+    flip = !flip;
+    (flags & 3 ? liveA : liveP).textContent = text + (flip ? "" : "\u00a0");
+  }
+}
+function heard(bytes) {                                    // whole F0..F7 frames from the firmware
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] !== 0xf0) continue;
+    let j = i + 1;
+    while (j < bytes.length && bytes[j] !== 0xf7) j++;
+    const d = bytes.slice(i, j);
+    i = j;
+    if (d[1] !== SR[0] || d[2] !== SR[1] || d[3] !== SR[2]) continue;
+    const body = (from) => String.fromCharCode(...d.slice(from).filter((b) => b < 128));
+    if (d[4] === HELLO && !reader.ready) {
+      const [, link = ""] = body(6).split("\0");
+      reader.ready = wordsFrom(/^https:\/\/[^\s"']+\.json$/.test(link) ? link : "").then((w) => { reader.words = w; });
+    } else if (d[4] === SAYS && reader.mode !== "off") {
+      const text = body(6).replace(/\0/g, ""), flags = d[5];
+      (reader.ready || Promise.resolve()).then(() => speak(text, flags));
+    }
+  }
+}
 
 // ---------------------------------------------------------------- Web MIDI
 let midiAccess = null;
+const midiNote = document.getElementById("midinote");
 const outSel = document.getElementById("midiout"), inSel = document.getElementById("midiin");
 const LEN = { 0x8: 3, 0x9: 3, 0xA: 3, 0xB: 3, 0xC: 2, 0xD: 2, 0xE: 3, 0xF: 1 };   // bytes by CIN
 function midiOut(pkts) {
@@ -473,9 +771,10 @@ inSel.addEventListener("change", () => {
 });
 if (navigator.requestMIDIAccess) {
   navigator.requestMIDIAccess().then((a) => { midiAccess = a; listPorts(); a.onstatechange = listPorts; })
-    .catch(() => { outSel.disabled = inSel.disabled = true; });
+    .catch(() => { outSel.disabled = inSel.disabled = true; midiNote.textContent = "(MIDI ports: not allowed by the browser)"; });
 } else {
   outSel.disabled = inSel.disabled = true;
+  midiNote.textContent = "(MIDI ports need Chrome or Edge)";
 }
 document.getElementById("reset").addEventListener("click", () => {
   if (document.getElementById("reset").dataset.armed) {
@@ -484,6 +783,7 @@ document.getElementById("reset").addEventListener("click", () => {
   } else {
     document.getElementById("reset").dataset.armed = "1";
     document.getElementById("reset").textContent = "Click again to forget everything";
+    status.textContent = "Factory reset: press it again to forget your settings.";
   }
 });
 </script>

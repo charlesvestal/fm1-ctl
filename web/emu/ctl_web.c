@@ -49,9 +49,39 @@ __attribute__((used, visibility("default"))) void web_render(uint32_t n)
         q_lr[i] = q_lr[2u * n + i];
 }
 
+/* a screen reader (fm1-reader): the page writes a SysEx frame (the bytes between F0 and F7) to web_sysex_buf and
+ * calls web_sysex(n); what the firmware says back, whole F0..F7 frames, from web_said_buf (web_said_len bytes;
+ * web_said_clear when read) */
+static uint8_t said_buf[4096], sx_in[64];
+static uint32_t said_n;
+static void web_said(const uint8_t *p, uint32_t n)
+{
+    if (said_n + n <= sizeof said_buf) {
+        memcpy(said_buf + said_n, p, n);
+        said_n += n;
+    }
+}
+__attribute__((used, visibility("default"))) uint8_t *web_said_buf(void) { return said_buf; }
+__attribute__((used, visibility("default"))) uint32_t web_said_len(void) { return said_n; }
+__attribute__((used, visibility("default"))) void web_said_clear(void) { said_n = 0; }
+__attribute__((used, visibility("default"))) uint8_t *web_sysex_buf(void) { return sx_in; }
+__attribute__((used, visibility("default"))) void web_sysex(uint32_t n) { ann_frame(sx_in, n > sizeof sx_in ? sizeof sx_in : n, now_ms); }
+
 __attribute__((used, visibility("default"))) void web_boot(void) { boot(); }
 __attribute__((used, visibility("default"))) void web_buttons(uint32_t m) { held_btn = m; }
-__attribute__((used, visibility("default"))) void web_keys(uint32_t m) { held_keys = m; }
+/* the keys held (a mask), each landing at velocity 100 when it goes down; web_key: one key, at vel 1..127
+ * (0 = up), pressed press 0..1000 more (Touch on: sense.c reads them as the FM-1's keys) */
+__attribute__((used, visibility("default"))) void web_keys(uint32_t m)
+{
+    uint32_t k, ch = m ^ held_keys;
+    for (k = 0; k < NKEYS; k++)
+        if (ch >> k & 1u)
+            host_key(k, m >> k & 1u ? 100u : 0u, 0.0f);
+}
+__attribute__((used, visibility("default"))) void web_key(uint32_t k, uint32_t vel, uint32_t press)
+{
+    host_key(k, vel, (float)(press > 1000u ? 1000u : press) * 0.001f);
+}
 __attribute__((used, visibility("default"))) void web_enc(int role, int32_t n)
 {
     if (role >= 0 && role < NE)

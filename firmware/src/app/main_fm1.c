@@ -292,6 +292,13 @@ static void fm1_main(void)
                 enter_uboot("UBOOT");
             }
         }
+        {   /* a screen reader's SysEx (announce.c), before the updater looks; USB SysEx is never forwarded
+             * to MIDI out or Bluetooth, so the reader's frames end here */
+            const uint8_t *p;
+            uint32_t n;
+            if (ota_frame_get(&p, &n) && ann_frame(p, n, fm1_ms))
+                ota_frame_done();
+        }
         ota_service();                              /* M-UPGRADE handshake (other SysEx is dropped) */
         if (usb.ota_req) {
             usb.ota_req = 0;
@@ -308,7 +315,8 @@ static void fm1_main(void)
         ble_poll();                                 /* Bluetooth's tasks, once started */
         {   /* MASTER: smoothed, 0..4096 (the UI sends it as a controller when asked to) */
             static int32_t knob = -1;
-            int32_t a = fm1_adc_read(FM1_ADC_MASTER);
+            int32_t a = fm1_an.con || fm1_an.pend ? (int32_t)fm1_an.master   /* the scan owns the converter */
+                                                  : fm1_adc_read(FM1_ADC_MASTER);
             if (a >= 0) {
                 knob = knob < 0 ? a * 16 : knob + (a * 16 - knob) / 8;
                 master_q12 = (uint32_t)(knob / 4);

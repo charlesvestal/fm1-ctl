@@ -9,7 +9,8 @@
  * Script, one command per line (# comments):
  *   wait MS                      run the device for MS milliseconds
  *   press BTN | release BTN | tap BTN     (BTN: FX SEL ENV LFO EDIT GLO HOME SAVE ARP SEQ PLAY REC OCT- OCT+)
- *   key K down|up | tapkey K     (K: 0..26 = F3..G5)
+ *   key K down|up [VEL [PRESS]] | tapkey K [VEL]   (K: 0..26 = F3..G5; with Touch on, the key lands at
+ *                                VEL 1..127, default 100, and is pressed PRESS 0..100 % more; sense.c reads it)
  *   turn ENC N [MS]              (ENC: SELECT ALGO PRESET K1 K2 K3 K4; N detents, MS apart, default 80)
  *   spin ENC N                   N detents at once, exactly N (no acceleration)
  *   midi PORT B0 B1 B2           incoming MIDI message (PORT: USB BLE TRS; hex bytes)
@@ -20,7 +21,16 @@
  *   out                          print the MIDI sent since the last "out" (and forget it; clocks not shown)
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
  *   expect_out PORT B0 B1 B2     check that this message went out to PORT since the last "out"
+ *   fixed                        Touch off: the keys at the fixed velocity, no aftertouch (Touch is on by
+ *                                default; scenarios about the notes, whose quick taps are too short to sense)
  *   reboot                       re-run boot from the simulated flash (persistence test)
+ *   listen                       a screen reader starts listening (HELLO, again every 2 s): each SAY is printed
+ *                                ("said: ..."; "said!:" cuts off what was being said)
+ *   where                        the reader asks for everything on the screen
+ *   said TEXT                    some SAY since the last "said" (or "listen") has TEXT in it: else a failure
+ *   unsaid TEXT                  no SAY since the last "said" has TEXT in it: else a failure
+ *   speakdump                    every page, knob value, chord and message as the reader gets them (the audit)
+ * CTL_SAID_LOG=FILE: a reader listens from boot, quietly, and every SAY is appended to FILE (the audit).
  */
 #define CT_HOST 1
 #include <stdio.h>
@@ -177,10 +187,126 @@ int plat_store_save(uint32_t obj, const void *src, uint32_t len)
 }
 
 /* -------------------------------------------------------------- app --- */
+static int sense_on;
+void plat_sense(int on) { sense_on = on; }
+#define ANALOG 0xFFFFFu                /* keys 0..19 on the analog rows, as on the FM-1 */
+uint32_t plat_analog_mask(void) { return ANALOG; }
+
 #include "../firmware/src/app/app.h"
+#define ANN_NAME "CTL-1 " CT_VERSION
+#include "ann_words.h"                                  /* the words file's link (tools/gen_words.py) */
+#include "../firmware/src/announce.c"
+/* what the reader is told: every SAY to stdout with "said:" (listen), and kept for the "said" check */
+static char said_last[ANN_MAX + 1], said_log[16384];   /* said_log: every SAY since the last "said" check */
+static uint32_t said_len;
+static int said_print = 1, sim_listen;
+static FILE *said_log_f;                                /* CTL_SAID_LOG=FILE: every SAY, for fm1-reader's audit */
+#ifdef CT_WEB
+static void web_said(const uint8_t *p, uint32_t n);
+#endif
+static int ann_wire_send(const uint8_t *p, uint32_t n)
+{
+#ifdef CT_WEB
+    web_said(p, n);
+#endif
+    if (n >= 7u && p[4] == ANN_SAY) {
+        uint32_t i, k = 0;
+        for (i = 6; i + 1u < n && k < ANN_MAX; i++)
+            said_last[k++] = (char)p[i];
+        said_last[k] = 0;
+        if (said_len + k + 2u < sizeof said_log) {
+            memcpy(said_log + said_len, said_last, k);
+            said_len += k;
+            said_log[said_len++] = '\n';
+            said_log[said_len] = 0;
+        }
+#ifndef CT_WEB
+        if (said_print)
+            printf("said%s: %s\n", (p[5] & ANN_NOW) ? "!" : "", said_last);
+        if (said_log_f)
+            fprintf(said_log_f, "%s\t%s\n", (p[5] & ANN_KEEP) ? "WARN" : "MSG", said_last);
+#endif
+    }
+    return 0;
+}
+#include "../firmware/src/app/sense.c"
 #include "../firmware/src/app/project.c"
 #include "../firmware/src/app/engine.c"
 #include "../firmware/src/app/ui.c"
+
+/* ------------------------------------------------- the keys, sensed --- */
+/* with Touch on, what Velo's sensing would read from the FM-1 (MONK-1's emulator, web/emu/monk_web.c): a
+ * pulled-up sample under PRESS, a driven one at the depth the key's calibration maps to its velocity, then
+ * deeper by the lean that ui.c's pressure() reads as its pressure; the top seven keys through the probe */
+#define PULL_DOWN 300u
+static uint8_t k_vel[NKEYS];           /* 0 = up; else the velocity it lands with */
+static float k_press[NKEYS];           /* 0..1 */
+static uint16_t k_land[NKEYS];
+static uint32_t k_t0[NKEYS];
+
+static uint16_t land_for(uint32_t k, uint32_t v)   /* sense_velocity_d, inverted */
+{
+    const sense_key_t *s = &sn_key[k];
+    float r0 = (float)(s->dfloor > SN_DBASE ? s->dfloor - SN_DBASE : 1u), r1 = (float)(s->dceil - SN_DBASE);
+    float c = (float)(sn_cfg.d_curve ? sn_cfg.d_curve : 1u) * 0.01f, t;
+    if (v >= 127u)
+        return (uint16_t)(s->dfloor > 1u ? s->dfloor - 1u : 1u);
+    t = 1.0f - fm_powf(((float)v - 1.0f) / 126.0f, 1.0f / c);
+    return (uint16_t)(SN_DBASE + (uint32_t)(r0 * fm_powf(r1 / r0, t) + 0.5f));
+}
+
+static void sense_scan(void)           /* every 2 ms: each analog key's samples */
+{
+    uint32_t k;
+    for (k = 0; k < NKEYS; k++) {
+        if (!(ANALOG >> k & 1u))
+            continue;
+        if (!k_vel[k]) {
+            if (sn_key[k].st != SN_OPEN)
+                sense_sample(k, 1023u, now_ms * 24000u, 0);
+            continue;
+        }
+        if (sn_key[k].st == SN_OPEN) {
+            k_land[k] = land_for(k, k_vel[k]);
+            k_t0[k] = 0;
+        }
+        sense_sample(k, PULL_DOWN, now_ms * 24000u, 0);
+        if (sense_want_drive(k)) {
+            uint32_t d = k_land[k];
+            if (sn_key[k].st == SN_DOWN && !k_t0[k])
+                k_t0[k] = now_ms;
+            if (k_t0[k] && now_ms - k_t0[k] > P_SETTLE + 20u && p_on[k] && k_press[k] > 0.0f) {
+                float lean = P_DEAD + k_press[k] * P_SPAN(0.5f + (float)proj.at_sens * 0.09f);
+                float r = p_base[k] / fm_exp2f(lean);
+                d = SN_DBASE + (uint32_t)(r > 2.0f ? r : 2.0f);
+            }
+            sense_sample(k, d, now_ms * 24000u, 1);
+        }
+    }
+}
+
+/* key k: vel 0 = up, else held, landed at vel; press 0..1 */
+static void host_key(uint32_t k, uint32_t vel, float press)
+{
+    if (k >= NKEYS)
+        return;
+    k_vel[k] = (uint8_t)(vel > 127u ? 127u : vel);
+    k_press[k] = press < 0.0f ? 0.0f : press > 1.0f ? 1.0f : press;
+    if (vel && !(ANALOG >> k & 1u)) {  /* the probe's rise above its open reading that maps to vel (the curve inverted) */
+        uint32_t lo = sn_cfg.t_lo, hi = sn_cfg.t_hi > lo ? sn_cfg.t_hi : lo + 1u, i;
+        float c = (float)(sn_cfg.t_curve ? sn_cfg.t_curve : sn_cfg.d_curve ? sn_cfg.d_curve : 1u) * 0.01f;
+        float x = fm_powf(((float)k_vel[k] - 1.0f) / 126.0f, 1.0f / c);
+        for (i = 0; i < 8u; i++)
+            sense_probe(k, 100u, 0);
+        sense_probe(k, 100u + lo + (uint32_t)((float)(hi - lo) * x + 0.5f), 1);
+    } else if (!(ANALOG >> k & 1u)) {
+        sense_probe(k, 100u, 0);
+    }
+    if (vel)
+        held_keys |= 1u << k;
+    else
+        held_keys &= ~(1u << k);
+}
 
 /* ---------------------------------------------------------- outputs --- */
 static void png_write(const char *path)
@@ -305,7 +431,13 @@ static void run_ms(uint32_t ms)
     uint32_t i;
     for (i = 0; i < ms; i++) {
         now_ms++;
+        if (sense_on && !(now_ms & 1u))
+            sense_scan();
         ble_tick();
+        if (sim_listen && now_ms % 2000u == 0) {        /* the reader's HELLO, as it sends it */
+            static const uint8_t HELLO[] = {ANN_H0, ANN_H1, ANN_H2, ANN_HELLO, ANN_VER};
+            ann_frame(HELLO, sizeof HELLO, now_ms);
+        }
         engine_tick();                     /* the device's 1 kHz tick */
 #ifndef CT_WEB                             /* (the browser renders it for its audio: web/emu/ctl_web.c) */
         if (now_ms % 6u == 0u) {           /* the synth, about as often as the device's audio halves */
@@ -354,6 +486,18 @@ static int expect(const char *what, const char *val)
         got = proj.sound;
     else if (!strcmp(what, "view"))
         got = ui.view;
+    else if (!strcmp(what, "setup_pg"))    /* Setup's pages: 1 = Touch */
+        got = ui.setup_pg;
+    else if (!strcmp(what, "touch"))       /* the keys are sensed (velocity or aftertouch on) */
+        got = touch_live;
+    else if (!strcmp(what, "last_vel"))    /* the last velocity sensed */
+        got = ui.last_vel;
+    else if (!strcmp(what, "at")) {        /* the most aftertouch sent for a held key */
+        int k;
+        got = 0;
+        for (k = 0; k < NKEYS; k++)
+            got = at_sent[k] > got ? at_sent[k] : got;
+    }
     else if (!strcmp(what, "chan"))
         got = proj.chan;
     else if (!strcmp(what, "vel"))
@@ -466,7 +610,16 @@ int main(int argc, char **argv)
     }
     snprintf(out, sizeof out, "%s/midi_out.txt", dir);
     midi_log = fopen(out, "w");
+    if (getenv("CTL_SAID_LOG")) {                        /* a reader listens from the start, quietly: the log only */
+        said_log_f = fopen(getenv("CTL_SAID_LOG"), "a");
+        sim_listen = 1;
+        said_print = 0;
+    }
     boot();
+    if (sim_listen) {
+        static const uint8_t HELLO[] = {ANN_H0, ANN_H1, ANN_H2, ANN_HELLO, ANN_VER};
+        ann_frame(HELLO, sizeof HELLO, now_ms);
+    }
     while (fgets(line, sizeof line, sc)) {
         char cmd[32] = {0}, a[256] = {0}, b[64] = {0}, c[64] = {0}, d[64] = {0};
         lineno++;
@@ -494,15 +647,15 @@ int main(int argc, char **argv)
                 return 2;
             }
             if (cmd[0] == 't') {
-                held_keys |= 1u << k;
+                host_key((uint32_t)k, b[0] ? (uint32_t)atoi(b) : 100u, 0.0f);
                 run_ms(60);
-                held_keys &= ~(1u << k);
+                host_key((uint32_t)k, 0, 0.0f);
                 run_ms(30);
             } else {
                 if (!strcmp(b, "down"))
-                    held_keys |= 1u << k;
+                    host_key((uint32_t)k, c[0] ? (uint32_t)atoi(c) : 100u, d[0] ? (float)atoi(d) * 0.01f : 0.0f);
                 else
-                    held_keys &= ~(1u << k);
+                    host_key((uint32_t)k, 0, 0.0f);
                 run_ms(2);
             }
         } else if (!strcmp(cmd, "turn")) {
@@ -578,9 +731,45 @@ int main(int argc, char **argv)
             fails += expect(a, b);
         else if (!strcmp(cmd, "expect_out"))
             fails += expect_out(a, mk_pkt(b, c, d));
-        else if (!strcmp(cmd, "reboot")) {
+        else if (!strcmp(cmd, "fixed")) {   /* the keys at the fixed velocity, no aftertouch (Touch's defaults are on): for
+                                                * scenarios about the notes, whose taps are too short to sense */
+            proj.touch = 0;
+            proj.at_mode = AT_OFF;
+            touch_apply();
+            run_ms(1);
+        } else if (!strcmp(cmd, "reboot")) {
             memset(&proj, 0, sizeof proj);
             boot();
+        } else if (!strcmp(cmd, "listen")) {
+            static const uint8_t HELLO[] = {ANN_H0, ANN_H1, ANN_H2, ANN_HELLO, ANN_VER};
+            sim_listen = 1;
+            said_len = 0;
+            said_log[0] = 0;
+            ann_frame(HELLO, sizeof HELLO, now_ms);
+            run_ms(40);
+        } else if (!strcmp(cmd, "speakdump")) {        /* every screen's text for a screen reader, to stdout */
+            speak_dump();
+        } else if (!strcmp(cmd, "where")) {
+            static const uint8_t WHERE[] = {ANN_H0, ANN_H1, ANN_H2, ANN_WHERE};
+            ann_frame(WHERE, sizeof WHERE, now_ms);
+            run_ms(40);
+        } else if (!strcmp(cmd, "said") || !strcmp(cmd, "unsaid")) {
+            int un = cmd[0] == 'u';
+            char *t = line + strlen(cmd), *e;
+            while (*t == ' ')
+                t++;
+            e = t + strlen(t);
+            while (e > t && (e[-1] == '\n' || e[-1] == '\r' || e[-1] == ' '))
+                *--e = 0;
+            if ((strstr(said_log, t) == 0) != un) {
+                printf("FAIL line %d: %s \"%s\" (since the last check: %s)\n", lineno, un ? "said, not wanted" : "not said",
+                       t, said_len ? said_log : "nothing\n");
+                fails++;
+            } else {
+                printf("  ok %s \"%s\"\n", cmd, t);
+            }
+            said_len = 0;
+            said_log[0] = 0;
         } else if (!strcmp(cmd, "echo"))
             printf("%s", line + 5);
         else {

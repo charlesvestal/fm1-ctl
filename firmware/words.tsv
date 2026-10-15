@@ -1,0 +1,43 @@
+# CTL-1's words for the screen reader (fm1-reader): the screen's text <TAB> what to say. "#" a number, "*" a
+# word left out. tools/gen_words.py makes web/words/<id>.json (published with the site) and the link the
+# FM-1 sends. Change a line and a new file is made: keep the old ones (devices in the wild point at them).
+# url: https://charlesvestal.github.io/fm1-ctl/words/
+# the note A before a word is the note, not the article ("A minor")
+A major	A major
+A minor	A minor
+A dorian	A dorian
+A mixolydian	A mixolydian
+A harmonic	A harmonic
+A pentatonic	A pentatonic
+A blues	A blues
+A diminished	A diminished
+A augmented	A augmented
+A suspended	A suspended
+A and	A and
+A minus	A minus
+# knobs and pages
+Seq ch #	sequencer channel #
+AT sens	aftertouch sensitivity
+Ext	external
+CTL-1	C T L 1
+DEV	development build
+TRS	T R S jack
+BLE	Bluetooth
+GM	General MIDI
+CH #	channel #
+CC	controller
+Up-down	up and down
+# General MIDI program names, shortened on the screen
+E.Piano #	electric piano #
+Perc. Organ	percussive organ
+Overdrive Gtr	overdrive guitar
+Distortion Gtr	distortion guitar
+Gtr Harmonics	guitar harmonics
+Tremolo Str	tremolo strings
+Pizzicato Str	pizzicato strings
+Orch. Harp	orchestral harp
+Orch. Hit	orchestra hit
+Synth Str #	synth strings #
+Choir Aahs	choir ahs
+Voice Oohs	voice oohs
+Sci-fi	science fiction

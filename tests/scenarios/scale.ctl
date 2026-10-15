@@ -1,4 +1,5 @@
 # a scale: white keys its steps, black keys its chords
+fixed
 tap SEL
 expect view 1
 spin K2 1

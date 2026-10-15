@@ -52,12 +52,18 @@ class Ctl extends AudioWorkletProcessor {
       this.ex.web_buttons(m.mask >>> 0);
     } else if (m.type === "keys") {
       this.ex.web_keys(m.mask >>> 0);
+    } else if (m.type === "key") {
+      this.ex.web_key(m.key, m.vel | 0, m.press | 0);
     } else if (m.type === "enc") {
       this.ex.web_enc(m.role, m.n | 0);
     } else if (m.type === "master") {
       this.ex.web_master(m.value | 0);
     } else if (m.type === "midi") {
       this.ex.web_midi_in(m.port | 0, m.pkt >>> 0);
+    } else if (m.type === "sysex" && this.ex.web_sysex) {    // the screen reader's (fm1-reader), between F0 and F7
+      const b = new Uint8Array(m.bytes).subarray(0, 64);
+      new Uint8Array(this.mem.buffer, this.ex.web_sysex_buf(), b.length).set(b);
+      this.ex.web_sysex(b.length);
     }
   }
 
@@ -102,6 +108,11 @@ class Ctl extends AudioWorkletProcessor {
     if (no) {                                          // the MIDI sent, for the page's Web MIDI output
       this.port.postMessage({ type: "midi", pkts: Array.from(new Uint32Array(this.mem.buffer, this.ex.web_out_pkts(), no)) });
       this.ex.web_out_clear();
+    }
+    const ns = this.ex.web_said_len ? this.ex.web_said_len() : 0;
+    if (ns) {                                          // what the firmware said to the screen reader: F0..F7 frames
+      this.port.postMessage({ type: "said", bytes: Array.from(new Uint8Array(this.mem.buffer, this.ex.web_said_buf(), ns)) });
+      this.ex.web_said_clear();
     }
     if (currentTime - this.lastFrame >= 1 / 30) {
       this.lastFrame = currentTime;

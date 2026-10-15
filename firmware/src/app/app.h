@@ -19,6 +19,7 @@
 
 enum { CLK_INT_OUT, CLK_INT, CLK_EXT, NCLK };
 enum { SOUND_IN, SOUND_KEYS, SOUND_OFF, NSOUND };   /* the onboard GM synth plays: Ctl's notes and MIDI in / Ctl's / nothing */            /* internal clock sent out / kept in / followed from MIDI in */
+enum { AT_OFF, AT_POLY, AT_CHAN, NAT };   /* aftertouch from the keys: none / per note / the channel's */
 enum { ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_RANDOM, ARP_PLAYED, NARP };
 enum { RATE_4, RATE_8, RATE_8T, RATE_16, RATE_16T, RATE_32, NRATE };
 
@@ -49,7 +50,11 @@ typedef struct {
     uint8_t sound;                       /* SOUND_IN on (0, the default) or SOUND_OFF; SOUND_KEYS from older
                                           * projects is read as on with in_mute */
     uint8_t in_mute;                     /* 1: MIDI in does not play the synth */
-    uint8_t rsv[14];                     /* room to grow */
+    uint8_t touch;                       /* velocity from the keys: 0 off (every note proj.vel), 1 on */
+    uint8_t at_mode;                     /* AT_*: the keys' aftertouch */
+    int8_t vel_curve;                    /* -5..+5: the velocity curve, 0 as measured (+ harder to reach 127) */
+    int8_t at_sens;                      /* -5..+5: how far a lean goes for full aftertouch, 0 as measured */
+    uint8_t rsv[10];                     /* room to grow */
 } project_t;
 
 extern project_t proj;

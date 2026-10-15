@@ -4,7 +4,9 @@
 
   index.html                     what CTL-1 is, and the ways in: try, install, manual, download, source
   img/                           screenshots (docs/img)
-  emu/                           CTL-1 in the browser (build/emu, from web/emu/build.sh with CT_BLE=0)
+  emu/                           CTL-1 in the browser (build/emu, from web/emu/build.sh with CT_BLE=0), with
+                                 fm1-reader's words.js, tts.js and eSpeak NG for its screen reader
+  words/                         the screen reader's words files (web/words, from firmware/words.tsv)
   install/index.html             the web installer (web/ctl_installer.html, with fm1pkg.js, fm1ota.js and
                                  the package's metadata inlined; Chrome or Edge, Web MIDI)
   manual/index.html, img/        the manual (tools/manual_html.py, from docs/MANUAL.md)
@@ -34,14 +36,15 @@ LANDING = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CTL-1</title>
+<title>CTL-1 · a MIDI controller for the FM-1</title>
 <meta name="description" content="A MIDI controller firmware for the M-VAVE FM-1: notes in any scale with its chords, four banks of knobs, an arpeggiator, a Euclidean drum sequencer, and General MIDI sounds of its own.">
 <meta name="theme-color" content="#fbf8f1">
 <style>
 /* CTL-1's paper and ink, as its screen: warm white paper, ink-blue type, vermilion for what is played,
    mustard for controllers */
 :root { --paper: #fbf8f1; --sheet: #efe9dc; --rule: #ddd4c2; --ink: #1e2b5a; --muted: #5d6585;
-        --hot: #e5482e; --hot-t: #f8d3c9; --cool: #d9a21b; --cool-t: #f5e4b8; color-scheme: light; }
+        --hot: #e5482e; --hot-t: #f8d3c9; --cool: #d9a21b; --cool-t: #f5e4b8; color-scheme: light;
+        --hot-ink: #c23a22; }   /* the vermilion behind or as text: 4.5:1 */
 body { background: var(--paper); color: var(--ink); margin: 0; padding-inline: 16px; padding-block: 48px 64px;
        font: 400 17px/1.6 "Helvetica Neue", Helvetica, Arial, sans-serif; }
 main { max-width: 42rem; margin: 0 auto; }
@@ -53,9 +56,10 @@ h2 { font-size: 1.15rem; font-weight: 700; margin: 2.4rem 0 .6rem; padding-top: 
 .shots img { width: 100%; height: auto; image-rendering: pixelated; border-radius: 4px; box-shadow: 0 0 0 1px var(--rule); }
 .ways { display: grid; gap: 10px; margin: 0 0 1rem; }
 .ways a { display: block; text-decoration: none; color: var(--ink); background: var(--sheet); border-radius: 8px; padding: 12px 16px; }
-.ways a:first-child { background: var(--hot); color: #fff; }
-.ways a:first-child span { color: #fde6df; }
-.ways a:hover, .ways a:focus-visible { background: var(--cool-t); color: var(--ink); outline: none; }
+.ways a:first-child { background: var(--hot-ink); color: #fff; }
+.ways a:first-child span { color: #fff; }
+.ways a:hover, .ways a:focus-visible { background: var(--cool-t); color: var(--ink); }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .ways a:first-child:hover span, .ways a:first-child:focus-visible span { color: var(--muted); }
 .ways strong { font-weight: 700; font-size: 1.15rem; display: block; }
 .ways span { color: var(--muted); font-size: .95rem; }
@@ -76,9 +80,9 @@ code { font-size: .9em; }
 the black keys, four banks of knobs, an arpeggiator and a Euclidean drum sequencer, over USB. And General MIDI
 sounds of its own, so it plays with nothing connected.</p>
 <div class="shots">
-  <img src="img/screen-play.png" width="240" height="240" alt="CTL-1's Play page: a chord held, the knob bank's four controllers">
-  <img src="img/screen-keys.png" width="240" height="240" alt="CTL-1's Keys page: D Dorian, its notes on the white keys">
-  <img src="img/screen-seq.png" width="240" height="240" alt="CTL-1's Sequencer page: four Euclidean drum tracks playing">
+  <img src="img/screen-play.png" width="240" height="240" alt="CTL-1's Play page: Note E4 100, a chord lit on the keys; bank A: CC 74 at 52, CC 71 at 70, CC 1 at 0, CC 7 at 100">
+  <img src="img/screen-keys.png" width="240" height="240" alt="CTL-1's Keys page: D Dorian, notes D E F G A B C; white keys the scale, black keys its chords">
+  <img src="img/screen-seq.png" width="240" height="240" alt="CTL-1's Sequencer page, playing at 120: rows of steps for Kick, Snare, Hat and Clap; track 2: 16 steps, 2 hits, rotate 4">
 </div>
 <nav class="ways" aria-label="Get CTL-1">
   <a href="emu/"><strong>Try it in the browser</strong><span>The same code the FM-1 runs, with sound. Mouse, touch or keyboard; in Chrome or Edge it can play your MIDI ports.</span></a>
@@ -90,7 +94,7 @@ sounds of its own, so it plays with nothing connected.</p>
 
 <h2>What it does</h2>
 <ul class="feat">
-  <li><b>Keys.</b> 27 keys, ±3 octaves. With a scale (nine of them, any root) the white keys play its notes and the black keys its chords. Sustain on ENV, tap it twice to lock; the mod wheel on LFO.</li>
+  <li><b>Keys.</b> 27 keys, ±3 octaves. With a scale (nine of them, any root) the white keys play its notes and the black keys its chords. Sustain on ENV, tap it twice to lock; the mod wheel on LFO. Velocity and aftertouch from the keys themselves, with no change to the hardware.</li>
   <li><b>Knobs.</b> Four controllers in four banks, 16 in all, each with its own number; MASTER can send one too.</li>
   <li><b>Arpeggiator.</b> Up, down, up-down, random or as played, 1/4 to 1/32, up to three octaves, with latch.</li>
   <li><b>Sequencer.</b> Four drum tracks of Euclidean rhythms, edited on the keys, on their own channel.</li>
@@ -143,9 +147,14 @@ def main(pkg, version, out):
     emu = SRC / "build" / "emu"
     if not (emu / "ctl.wasm").exists():
         raise SystemExit("no build/emu/ctl.wasm: run CT_BLE=0 web/emu/build.sh (needs Emscripten)")
+    if not (emu / "words.js").exists() or not (emu / "espeak" / "espeak.wasm").exists():
+        raise SystemExit("no build/emu/words.js or espeak/: the emulator's screen reader comes from fm1-reader "
+                         "(web/emu/build.sh copies it from ../fm1-reader/web, or set FM1_READER)")
     shutil.copytree(emu, out / "emu")
+    # the screen reader's words files (fm1-reader): every one ever made, for the devices that point at them
+    shutil.copytree(SRC / "web" / "words", out / "words")
     (out / ".nojekyll").write_text("")
-    print(f"site: {out}: index.html, install/ ({product}), manual/, emu/, firmware/{name} ({len(raw)} B)")
+    print(f"site: {out}: index.html, install/ ({product}), manual/, emu/, words/, firmware/{name} ({len(raw)} B)")
 
 
 if __name__ == "__main__":

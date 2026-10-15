@@ -31,6 +31,10 @@ void plat_yield(void);
 uint32_t plat_lock(void);
 void plat_unlock(uint32_t f);
 
+/* the keys' velocity and aftertouch: on, the scan samples the analog rows for sense.c (the keys on them
+ * then come from sense_take, not plat_keys); off by default */
+void plat_sense(int on);
+uint32_t plat_analog_mask(void);       /* bit k: key k is on an analog row */
 /* MIDI: 4-byte USB-MIDI event packets (byte 0 = cable / CIN, then status, data 1, data 2). The TRS
  * jack is MIDI IN only (the FM-1 has no MIDI out jack). */
 enum { PORT_USB, PORT_BLE, PORT_TRS, NPORTS };

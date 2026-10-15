@@ -10,6 +10,7 @@ EXE=build/host/ctl_host
 [ "$BLE" = 1 ] || EXE=build/host/ctl_host_usb
 mkdir -p build/gen build/host
 [ -f build/gen/felucca_font.h ] || python3 tools/gen_font.py build/gen/felucca_font.h >/dev/null
+python3 tools/gen_words.py firmware/words.tsv web/words build/gen/ann_words.h >/dev/null
 $CC -O2 -std=c99 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter \
     -DCT_HOST -DCT_BLE=$BLE -Ifirmware/src -Ifirmware/src/dsp -Ifirmware/src/dsp/eas -Ibuild/gen -o $EXE host/ctl_host.c \
     firmware/src/dsp/gm.c $(ls firmware/src/dsp/eas/*.c | grep -v "wt_22khz\|wt_200k_samples") -lm

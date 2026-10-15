@@ -4,8 +4,9 @@ CTL-1 turns the M-VAVE FM-1 into a MIDI controller. The keys play notes, in any 
 under the black keys; the knobs send controllers in four banks; an arpeggiator and a four-track
 Euclidean drum sequencer run on its clock. Everything goes out over USB, MIDI from the TRS jack is passed
 along, and the FM-1 plays it all on its own General MIDI sounds too, so it works with nothing connected.
+If you like, the keys can also sense how hard you play them, for velocity and aftertouch.
 
-![The FM-1 (a drawing), running CTL-1, each control labelled](img/fm1-panel.svg)
+![A drawing of the FM-1 running CTL-1, each knob, button and key labelled with what it does; section 3, Controls, says the same in words](img/fm1-panel.svg "The FM-1 (a drawing), running CTL-1, each control labelled")
 
 ---
 
@@ -92,7 +93,7 @@ The drawing at the top shows them all; here they are in more detail.
 | Keys | Notes, chromatic from F3; or, with a scale, its notes on the white keys and its chords on the black keys. On the Sequencer page they edit the steps instead |
 | OCT− / OCT+ | The keys an octave down or up, from −3 to +3 |
 | KNOB 1–4 | The four values at the bottom of the screen; on the Play page, four controllers |
-| SELECT | The current page's own pages: the knob banks on Play, the tracks on the Sequencer |
+| SELECT | The current page's own pages: the knob banks on Play, the tracks on the Sequencer, Touch on Setup |
 | ALGORITHM | MIDI channel, 1 to 16 |
 | PRESETS | Program change, 1 to 128; the FM-1's own sound follows it |
 | MASTER | The volume of the FM-1's sound, or a controller (Sound page) |
@@ -101,7 +102,7 @@ The drawing at the top shows them all; here they are in more detail.
 | ARP | Arp page |
 | SEQ | Sequencer page |
 | GLO | Sound page |
-| EDIT | Setup page: tempo, clock, sequencer channel, glow |
+| EDIT | Setup page: tempo, clock, sequencer channel, glow; and Touch: velocity and aftertouch from the keys |
 | FX | The next knob bank, A to D. Held: KNOB 1–4 set the bank's controller numbers |
 | ENV | Sustain while held. Tap it twice to lock sustain on; press it again to unlock |
 | LFO | Mod wheel: rises while held, falls when let go |
@@ -115,8 +116,8 @@ Each page has its own button, and that button lights while you're on the page.
 
 ## 4. The screen
 
-![The Play page: a chord held, KNOB 2 just turned](img/screen-play.png)
-![Sustain locked: ENV tapped twice](img/screen-sus.png)
+![The Play page on MIDI channel 1: Note E4 100; a chord lit on the keys; USB and TRS (in only); lowest key F3, sound Acoustic Grand; bank A: CC 74 at 52, CC 71 at 70 (highlighted), CC 1 at 0, CC 7 at 100](img/screen-play.png "The Play page: a chord held, KNOB 2 just turned")
+![SUSTAIN LOCKED across the top, CC 64 = 127 below it, and SUS LOCK beside the lowest key, D3; bank A's four controllers at the bottom](img/screen-sus.png "Sustain locked: ENV tapped twice")
 
 - **Top bar:** the page's name (on Play, the knob bank's letter in a chip), the MIDI channel in the
   middle, and the tempo with a play triangle on the right. The triangle is dark while playing and
@@ -127,7 +128,7 @@ Each page has its own button, and that button lights while you're on the page.
 - **Status line:** the lowest key's note; "ARP" or "LATCH" while the arpeggiator is on, "SUSTAIN" (or
   "SUS LOCK") and "MOD"; and on the right the program, by name.
 - **Knob row:** on its rule, a tag says what the knobs edit ("BANK A", "KEYS", "TRACK 2"…), with dots
-  for the four banks on Play and the four tracks on the Sequencer. Under it, KNOB 1–4: each one's name,
+  for the four banks on Play, the four tracks on the Sequencer and Setup's two pages. Under it, KNOB 1–4: each one's name,
   a dial (a row of pips for a setting with a few positions) and its value. The one you turned last
   stands out for a moment.
 - **Footer:** what the page's buttons and keys do.
@@ -145,8 +146,9 @@ The 27 keys play notes from F3 to G5 at octave 0. OCT− and OCT+ move them an o
 status line says which note is the lowest key. A note already held ends correctly even if you change
 the octave before letting go.
 
-- **Velocity** is fixed, because the FM-1's keys don't sense how hard they're pressed. Set it on the
-  Keys page (KNOB 3); it starts at 100.
+- **Velocity** is fixed at first: every note plays at the Keys page's Velocity (KNOB 3), 100 to start
+  with. With Touch on, the keys sense how hard you play them instead, and can send aftertouch. For
+  details, see [Touch](#touch).
 - **Sustain:** hold ENV. It sends controller 64 on, and off when you let go. **Tap ENV twice** quickly
   to lock sustain on ("SUS LOCK"); press ENV again to unlock, and sustain ends when you let go. REC
   unlocks it too.
@@ -177,7 +179,7 @@ for banks A, B, C and D. Each knob remembers its value in each bank, so it picks
 **Your own numbers:** hold FX and turn KNOB 1–4. While FX is held they set the current bank's four
 controller numbers (0 to 119), and letting go doesn't change the bank. Tap FX to reach another bank first.
 
-![FX held: the bank's controller numbers](img/screen-cc.png)
+![Bank A: CC numbers: Knob 1 #74, Knob 2 #71, Knob 3 #2 (highlighted), Knob 4 #7](img/screen-cc.png "FX held: the bank's controller numbers")
 
 Turning a knob slowly moves one step a click; turning it quickly moves up to six.
 
@@ -187,7 +189,7 @@ Turning a knob slowly moves one step a click; turning it quickly moves up to six
 
 Press SEL for the Keys page.
 
-![The Keys page: D Dorian](img/screen-keys.png)
+![The Keys page: D Dorian, notes D E F G A B C; white keys: the scale, black keys: its chords; Root D, Scale Dorian, Velocity 100, Humanize 0](img/screen-keys.png "The Keys page: D Dorian")
 
 | Knob | Sets |
 |---|---|
@@ -216,7 +218,7 @@ headphone jack. PRESETS picks the sound on the keyboard's channel.
 Press GLO for the Sound page. It shows the sound playing, how many voices sound and how busy the
 processor is.
 
-![The Sound page](img/screen-sound.png)
+![The Sound page: Acoustic Grand, GM program 1, voices 1, CPU 0%; Sound On, MIDI in Plays, MASTER Volume](img/screen-sound.png "The Sound page")
 
 | Knob | Sets |
 |---|---|
@@ -238,7 +240,7 @@ Press ARP for the Arp page; KNOB 1 there turns the arpeggiator on. While it's on
 directly: hold notes or a chord and it plays them one at a time, in tempo. With a scale, one black key
 is a whole chord to arpeggiate.
 
-![The Arp page: a chord held](img/screen-arp.png)
+![The Arp page: Arp on, up, 1/16, 1 octave, playing D3 F3 A3; Arp On, Mode Up, Rate 1/16, Octaves 1](img/screen-arp.png "The Arp page: a chord held")
 
 | Knob | Sets |
 |---|---|
@@ -261,7 +263,7 @@ on the same grid, so the two stay in time: a chord played between steps starts o
 Press SEQ for the Sequencer page: four drum tracks of sixteenth notes on the sequencer's channel, 10 by
 default. Each row on screen is one track.
 
-![The Sequencer page, playing, track 2 selected](img/screen-seq.png)
+![The Sequencer at 120, playing: rows of steps for Kick, Snare, Hat and Clap, Snare highlighted; track 2: Steps 16, Hits 2, Rotate 4, Note Snare](img/screen-seq.png "The Sequencer page, playing, track 2 selected")
 
 | Track | Note | Steps | Hits |
 |---|---|---|---|
@@ -317,7 +319,7 @@ sequencer, the Tempo knob rests, and the screen shows "EXT".
 
 Press EDIT for the Setup page. It also shows the MIDI counted in and out of each port, and the version.
 
-![The Setup page, the tempo just turned](img/screen-setup.png)
+![The Setup page: MIDI, USB in 0 out 12, TRS in 0; Tempo 112 (highlighted), Clock Int, Seq ch 10, Glow Low](img/screen-setup.png "The Setup page, the tempo just turned")
 
 | Knob | Sets |
 |---|---|
@@ -325,6 +327,39 @@ Press EDIT for the Setup page. It also shows the MIDI counted in and out of each
 | KNOB 2 Clock | Int, Int quiet, Ext |
 | KNOB 3 Seq ch | The sequencer's MIDI channel, 1 to 16 |
 | KNOB 4 Glow | Off, Low or High: how brightly unlit buttons glow |
+
+### Touch
+
+The FM-1's keys have no velocity sensors, but under each key is a carbon pill whose resistance falls
+as you press harder. CTL-1 can read it, so the keys play with velocity and aftertouch, with no change
+to the hardware. It's on at first, with aftertouch for each note. On the Setup page, turn SELECT for
+the Touch page.
+
+![The Touch page: velocity from the keys, aftertouch per note; bars for the held key's velocity and pressure; Velocity Keys, Curve 0, Aftertouch Poly, AT sens 0](img/screen-touch.png "The Touch page: velocity from the keys, aftertouch per note, a key held")
+
+| Knob | Sets |
+|---|---|
+| KNOB 1 Velocity | Fixed: every note at the Keys page's Velocity. Keys: velocity from how hard you play |
+| KNOB 2 Curve | −5 to +5. Higher means you play harder to reach 127; lower, softer playing reaches it |
+| KNOB 3 Aftertouch | Off; Poly, pressure for each note; or Channel, one pressure for the channel |
+| KNOB 4 AT sens | −5 to +5. Higher means a lighter lean gives full aftertouch |
+
+The page shows the last note's velocity and the pressure now, so you can see what your playing sends.
+
+- Where you press matters as much as how hard. Pressing near the bottom edge of a key plays
+  softer than the middle, on every key: the most reliable way to play quietly.
+- The keys sense in two zones. F3 to C5 read how hard the key lands, with the widest range, and
+  sense aftertouch too. The top seven read it another way: their soft end is narrower, firm
+  presses all come out near the top, and they have no aftertouch.
+- A note plays about 5 ms after the key goes down, once its velocity is read.
+- Aftertouch counts from where the key comes to rest after the note, so a key that's only held sends
+  nothing. Press harder to send more; ease off to send less.
+- Poly aftertouch goes to each note of a chord key. While the arpeggiator is on, aftertouch is the
+  channel's.
+- The arpeggiator and the sequencer keep the Keys page's Velocity, spread by Humanize.
+- On the Sequencer page the keys edit steps as usual, the moment they go down.
+- A lit LED changes the reading of the keys beside it, so while you hold a key, the lights in its
+  column go dark each time it's read. They look slightly dimmer.
 
 ---
 
@@ -342,7 +377,8 @@ What CTL-1 sends, on the keyboard's channel unless noted:
 
 | Action | Message |
 |---|---|
-| Key | Note on (velocity from the Keys page), note off |
+| Key | Note on (velocity from the Keys page, or from the key with Touch on), note off |
+| Pressing a held key (Touch) | Poly aftertouch for each of its notes, or channel aftertouch |
 | KNOB 1–4 on Play | Control change: the bank's controller |
 | MASTER | Control change: the Sound page's controller (when it has one) |
 | PRESETS | Program change |
@@ -441,6 +477,10 @@ USB lines) can still reach it.
 | Setup | Clock | Int, Int quiet, Ext | Int |
 | Setup | Seq ch | 1–16 | 10 |
 | Setup | Glow | Off, Low, High | Low |
+| Setup, Touch | Velocity | Fixed, Keys | Keys |
+| Setup, Touch | Curve | −5 – +5 | 0 |
+| Setup, Touch | Aftertouch | Off, Poly, Channel | Poly |
+| Setup, Touch | AT sens | −5 – +5 | 0 |
 | ALGORITHM | Channel | 1–16 | 1 |
 | PRESETS | Program | 1–128 | 1 (Acoustic Grand) |
 | OCT− / OCT+ | Octave | −3 – +3 | 0 |
@@ -458,6 +498,8 @@ must also share its source code.
 - The General MIDI sounds are **Sonivox EAS** and its 200 KB sound set (Apache-2.0, Sonic Network and
   the Android Open Source Project).
 - The Euclidean rhythms are Godfried Toussaint's reading of Bjorklund's algorithm.
+- Touch is the key sensing from [Velo](https://github.com/charlesvestal/fm1-velocity), as tuned for
+  [MONK-1](https://charlesvestal.github.io/fm1-monk/).
 - The idea of running FM-1 firmware in the browser comes from [Groove OS](https://www.groove-os.com/).
 - The fonts are Barlow Semi Condensed and Terminus (SIL Open Font License).
 
