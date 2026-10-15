@@ -26,14 +26,14 @@ spin K1 -1
 release FX
 wait 300
 said Play page, bank A
-# a key: its note, at once; a page settles before it is said
+# a key: its note is not said (the notes played are never read out)
 tapkey 0
 wait 200
-said F3
+unsaid F3
 tap SEL
 wait 300
 said Keys page: Root C, Scale chromatic, Velocity 100, Humanize 0
-# D dorian: a black key's chord by name
+# D dorian: a black key's chord is not said either
 spin K1 2
 wait 300
 said Root D
@@ -42,13 +42,13 @@ wait 300
 said Scale dorian
 tapkey 1
 wait 200
-said D minor
+unsaid D minor
 tapkey 3
 wait 200
-said E minor
+unsaid E minor
 tapkey 5
 wait 200
-said F major
+unsaid F major
 # a knob at its end: said again (an answer to every turn)
 spin K2 20
 wait 300
@@ -147,7 +147,8 @@ wait 300
 said AT sens -1
 key 2 down 90 60
 wait 800
-said G3, velocity
+unsaid G3
+unsaid velocity
 unsaid Pressure
 key 2 up
 wait 100

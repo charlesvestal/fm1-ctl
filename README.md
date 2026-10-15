@@ -36,8 +36,8 @@ The [manual](https://charlesvestal.github.io/fm1-ctl/manual/) has the rest.
 
 CTL-1 tells the [FM-1 Screen Reader](https://charlesvestal.github.io/fm1-reader/) what its screen shows,
 over USB: the page and its knobs, a knob's value as it turns (a controller with its name, "CC 74 cutoff
-64"), the channel and the program, the note or the chord a key plays ("D minor"), the Sequencer's steps
-and mutes, the Touch settings and a key's velocity, play and stop, and what each button did. Open the
+64"), the channel and the program, the Sequencer's steps and mutes, the Touch settings, play and stop,
+and what each button did (the notes you play are not read out). Open the
 page in Chrome with the FM-1 plugged in; it speaks with its own voice, or hands the text to your
 computer's screen reader. The reader's messages stay between it and CTL-1: they are never passed on to
 MIDI out or Bluetooth.

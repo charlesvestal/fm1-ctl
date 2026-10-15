@@ -107,13 +107,13 @@ static struct {
 #else
 #define SP_POOL __attribute__((section(".pool")))
 #endif
-enum { SE_NONE, SE_KEY, SE_STEP, SE_STEP_OUT, SE_MUTE, SE_PANIC };
+enum { SE_NONE, SE_STEP, SE_STEP_OUT, SE_MUTE, SE_PANIC };
 static struct {
     uint32_t ctx;                      /* the page, hashed: a change is said */
     int16_t val[4];                    /* the four knobs' values */
     uint8_t chan, program, playing, sus_lock, ble, started;
     uint32_t touch_until;              /* a knob turned (even when its value could not change) */
-    uint8_t ev, ev_n, ev_notes[3], ev_vel, ev_arg, ev_on;   /* the last key event: SE_* */
+    uint8_t ev, ev_arg, ev_on;         /* the last key event: SE_* */
 } sp SP_POOL;
 static uint8_t sp_said;                /* a message went to the screen reader this frame: speak() leaves it be */
 static void sp_event(int ev, int arg, int on)
@@ -287,11 +287,6 @@ static void key_down(int k, uint32_t vel)
     b = put_note(put_s(ui.last, n > 1 ? "Chord " : "Note "), q[0]);
     if (!proj.arp_on)
         put_u(put_s(b, "  "), vel);
-    sp_event(SE_KEY, 0, 1);                      /* a screen reader: its note or chord */
-    sp.ev_n = (uint8_t)n;
-    for (i = 0; i < n; i++)
-        sp.ev_notes[i] = q[i];
-    sp.ev_vel = (uint8_t)vel;
 }
 
 static void key_up(int k)
@@ -1736,8 +1731,7 @@ static void autosave(void)
 /* ------------------------------------------------------ screen reader --- */
 /* The screen as text for a screen reader on the computer (announce.c; fm1-reader): a page once it settles,
  * with its knobs; a knob's value as it turns (a controller with its name: "CC 74 cutoff 64"); the channel and
- * the program; the note or the chord a key plays, by name ("D minor"), and on the Touch page its velocity;
- * the Sequencer's steps and mutes; play and stop; what a button did (say). WHERE (the reader asks, or has
+ * the program; the Sequencer's steps and mutes; play and stop; what a button did (say). WHERE (the reader asks, or has
  * just started listening) is everything on the screen. The pressure bar is never said (it changes all the
  * time), nor the MIDI counters but on WHERE. Nothing is built while no reader listens. The screen's short
  * words are said in full by the words file (firmware/words.tsv); the rest is said here in words. */
@@ -1840,42 +1834,6 @@ static void sp_knob(int k)                       /* a knob's readout: its name, 
     sp_cat(t);
 }
 
-/* three notes by name, in any inversion ("D minor", "F# diminished"); else the notes */
-static void sp_chord(const uint8_t *q, int n)
-{
-    static const uint8_t SHAPE[6][2] = {{4, 7}, {3, 7}, {3, 6}, {4, 8}, {5, 7}, {2, 7}};
-    static const char *const SHAPE_SAID[6] = {" major", " minor", " diminished", " augmented", " suspended fourth",
-                                              " suspended second"};
-    int r, s, i;
-    if (n == 3)
-        for (r = 0; r < 3; r++) {                /* each note as the root */
-            int a = ((q[(r + 1) % 3] - q[r]) % 12 + 12) % 12, b = ((q[(r + 2) % 3] - q[r]) % 12 + 12) % 12;
-            for (s = 0; s < 6; s++)
-                if ((a == SHAPE[s][0] && b == SHAPE[s][1]) || (a == SHAPE[s][1] && b == SHAPE[s][0])) {
-                    sp_cat(NOTE_NAME[q[r] % 12]);
-                    sp_cat(SHAPE_SAID[s]);
-                    return;
-                }
-        }
-    sp_cat("notes ");
-    for (i = 0; i < n; i++) {
-        if (i)
-            sp_cat(", ");
-        sp_note(q[i]);
-    }
-}
-static void sp_played(void)                      /* the key just played: its note or chord */
-{
-    sp_n = 0;
-    if (sp.ev_n == 1)
-        sp_note(sp.ev_notes[0]);
-    else
-        sp_chord(sp.ev_notes, sp.ev_n);
-    if (ui.view == V_SETUP && ui.setup_pg && touch_live && proj.touch) {   /* the Touch page: what the key sensed */
-        sp_cat(", velocity ");
-        sp_num(sp.ev_vel);
-    }
-}
 static void sp_program(void)                     /* "Program 53, Choir Aahs" */
 {
     sp_n = 0;
@@ -2143,10 +2101,6 @@ static void speak(void)
         return;
     }
     switch (ev) {                                     /* the keys */
-    case SE_KEY:
-        sp_played();
-        ann_later(sp_buf, ANN_NOW, 150u, now);        /* a run of notes: the last, once it settles */
-        break;
     case SE_STEP:
         sp_n = 0;
         sp_cat("Step ");
@@ -2212,7 +2166,6 @@ static void speak_dump(void)
     static uint8_t keep_ui[sizeof ui];
     project_t keep = proj;
     int v, q, x, i, k;
-    uint8_t notes[3];
     memcpy(keep_ui, &ui, sizeof ui);
     for (v = 0; v < NVIEWS; v++) {                    /* every page (Play: each bank, and FX held; Sequencer:
                                                        * each track, on channel 10 and on another) */
@@ -2258,12 +2211,6 @@ static void speak_dump(void)
             proj.root = (uint8_t)i;
             sp_screen(1);
             sp_print("WHERE", sp_buf);
-            for (k = 0; k < 11 && x; k++) {           /* the black keys' chords */
-                sp.ev_n = (uint8_t)key_notes(BLACK_K[k], notes);
-                memcpy(sp.ev_notes, notes, 3);
-                sp_played();
-                sp_print("CHORD", sp_buf);
-            }
         }
     proj = keep;
     ui.view = V_SEQ;                                  /* the steps: none, all, muted */
@@ -2282,13 +2229,6 @@ static void speak_dump(void)
         ui.last_vel = 87;
         sp_screen(1);
         sp_print("WHERE", sp_buf);
-    }
-    for (x = 0; x < 128; x++) {                       /* a note played on it */
-        sp.ev_n = 1;
-        sp.ev_notes[0] = (uint8_t)x;
-        sp.ev_vel = (uint8_t)(x ? x : 1);
-        sp_played();
-        sp_print("NOTE", sp_buf);
     }
     proj = keep;
     touch_apply();
