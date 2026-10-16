@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (C) 2026 Charles Vestal */
 /* The GM synth (dsp/gm.c and its EAS): ten-note chords at velocity 127 never reach EAS's 16-bit rail
  * and the output never passes full scale (gain staging); a released note fades out, its reverb and
  * chorus tail too, with no sudden drop (EAS stopped the effects with the last voice: a hard edge). */

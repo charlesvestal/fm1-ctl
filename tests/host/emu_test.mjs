@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Charles Vestal
 // The browser build in Node: boot it, play a key and turn a knob, expect the MIDI out and screen frames,
 // and the synth's sound: silence at rest, a note while a key is held, nothing with MASTER down.
 import fs from "fs";
