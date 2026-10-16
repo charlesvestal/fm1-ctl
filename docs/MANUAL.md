@@ -448,6 +448,12 @@ If CTL-1 ever crashes while Bluetooth is running, the next start leaves Bluetoot
 and says "BLUETOOTH OFF AFTER A CRASH". Everything else works. To start it again, press SAVE on the
 Bluetooth page (or hold SAVE on the Setup page). It starts by itself again at the next restart.
 
+**A Mac won't connect over Bluetooth:** if Audio MIDI Setup's Bluetooth window doesn't show FM-1 as connected
+after you click Connect, quit Audio MIDI Setup (⌘Q), open it again and click Connect once more. Audio MIDI Setup
+can lose touch with the Mac's MIDI service, and then it links to the FM-1 without starting its MIDI. The
+Bluetooth page then says "connected", with "No MIDI yet" in red under it. While it lasts, no other computer or tablet
+can find the FM-1.
+
 **The computer shows another name:** a Mac that knew the FM-1 with other firmware may keep the old
 name. Remove the FM-1 in Audio MIDI Setup (Window > Show MIDI Studio) and plug it in again.
 

@@ -489,7 +489,8 @@ static const char *bt_status(void)
         return "starting";
     if (s == BLE_FAILED)
         return "failed";
-    return plat_ble_connected() || plat_ble_device() == BLE_DEV_READY ? "connected" : "ready";
+    return plat_ble_linked() || plat_ble_device() == BLE_DEV_READY ? "connected" : "ready";   /* (linked: it holds
+                                                                                                * the FM-1, listening or not) */
 }
 /* FX held on Play: the knobs set the bank's controller numbers, shown once it has been held a moment
  * (a tap to change banks does not flash them) or a knob turns */
@@ -1158,7 +1159,7 @@ static int lit(int p, int out) { return plat_midi_ago(p, out) < FLASH_MS; }
 static void draw_header(void)
 {
     char t[24];
-    int msg = plat_ms() < ui.msg_until, bs = plat_ble_state(), bc = plat_ble_connected(), beat = eng_beat_on();
+    int msg = plat_ms() < ui.msg_until, bs = plat_ble_state(), bc = plat_ble_linked(), beat = eng_beat_on();
     int32_t x;
     uint32_t h = hash(hash(hash(2166136261u, ui.view), (uint32_t)msg | ui.dirty << 1 | (uint32_t)bs << 2 |
                                                            (uint32_t)bc << 4 | ui.playing << 5 | proj.arp_on << 6 |
@@ -1443,6 +1444,9 @@ static void draw_bt(void)
     cv_text(10, 2, &FONT_S, "Computer or tablet", K_TEXT);
     if (plat_ble_connected()) {
         text_r(230, 4, &FONT_XS, "connected", K_COOL_D);
+    } else if (plat_ble_linked()) {                  /* linked, its MIDI never started: it hides the FM-1 */
+        text_r(230, 4, &FONT_XS, "connected", K_COOL_D);
+        cv_text(10, 20, &FONT_XS, "No MIDI yet. Mac: reopen Audio MIDI Setup.", K_HOT);
     } else {
         text_r(230, 4, &FONT_XS, "not connected", K_DIM);
         cv_text(10, 20, &FONT_XS, "Connect to \"FM-1\" in its Bluetooth MIDI.", K_DIM);
@@ -1535,7 +1539,8 @@ static void draw_main(void)
     h = hash(hash_s(h, ui.last), proj.sound | (uint32_t)proj.chan << 4);
     for (p = 0; p < NPORTS; p++)
         h = hash(h, (uint32_t)lit((int)p, 0) | (uint32_t)lit((int)p, 1) << 1);
-    h = hash(h, (uint32_t)plat_ble_state() | (uint32_t)plat_ble_connected() << 4 | (uint32_t)plat_ble_device() << 5);
+    h = hash(h, (uint32_t)plat_ble_state() | (uint32_t)plat_ble_connected() << 4 | (uint32_t)plat_ble_device() << 5 |
+                    (uint32_t)plat_ble_linked() << 8);
     for (i = 0, p = (uint32_t)eng_pool(pool); i < (int)p; i++)
         h = hash(h, pool[i]);
     if (ui.view == V_SEQ)
@@ -1944,7 +1949,8 @@ static void sp_page(void)
             sp_cat(bt_stopped() ? "stopped after a crash. SAVE starts it" : bt_status());
             return;
         }
-        sp_cat(plat_ble_connected() ? ", a computer connected" : ", no computer connected");
+        sp_cat(plat_ble_connected() ? ", a computer connected" : plat_ble_linked() ?
+               ", a computer connected, its MIDI not started. On a Mac, reopen Audio MIDI Setup" : ", no computer connected");
         if (d == BLE_DEV_READY) {
             sp_cat(", connected to ");
             sp_cat(btdev_name());
