@@ -18,9 +18,9 @@ Bluetooth stack; it contains no JieLi code.
 
 | What | Origin | Licence |
 | --- | --- | --- |
-| The platform: `base/` (boot, USB, the TRS jack, storage, the update path, screen, panel, key sensing, Bluetooth's shim and MIDI service, the host simulator and the browser emulator, build and install tools) | [fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp), from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (@kurogedelic), Hügelton Instruments, under MPL-2.0 with his permission ([felucca-bsp#4](https://github.com/hugelton/felucca-bsp/issues/4)) | MPL-2.0 (the parts of `base/ble/` from JieLi's SDK: Apache-2.0) |
+| The platform: `base/` (boot, USB, the TRS jack, storage, the update path, screen, panel, key sensing and the keys' velocity and pressure (lib/touch), Bluetooth's shim and MIDI service, the host simulator and the browser emulator, build and install tools) | [fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp), from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (@kurogedelic), Hügelton Instruments, under MPL-2.0 with his permission ([felucca-bsp#4](https://github.com/hugelton/felucca-bsp/issues/4)) | MPL-2.0 (the parts of `base/ble/` from JieLi's SDK: Apache-2.0) |
 | `web/ctl_installer.html` | Felucca's installer page, by way of X0X and AMB-1 | MPL-2.0 |
-| `app/` (`app.c`, `app.h`, `ui.c`, `engine.c`, `project.c`, `sense.c`, `host.c`, `dsp/gm.c`), `app/web/emu/`, `tests/`, `tools/` | Ctl, Charles Vestal | MPL-2.0 |
+| `app/` (`app.c`, `app.h`, `ui.c`, `engine.c`, `project.c`, `host.c`, `dsp/gm.c`), `app/web/emu/`, `tests/`, `tools/` | Ctl, Charles Vestal | MPL-2.0 |
 | The idea of a browser emulator for FM-1 firmware (`app/web/emu/`) | [Groove OS](https://www.groove-os.com/) by Peter Gombos, whose site runs its firmware in the browser; no code from it | credit only |
 
 ## Third-party material

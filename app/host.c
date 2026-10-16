@@ -1,85 +1,12 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Charles Vestal */
-/* Ctl in fm1-base's host simulator (host/plat_host.c, which includes app.c and so this): what the keys' sensing
- * would read, Ctl's checks for "expect", its commands, a reboot and the screen reader's dump.
+/* Ctl in fm1-base's host simulator (host/plat_host.c, which includes app.c and so this): Ctl's checks for "expect",
+ * its commands, a reboot and the screen reader's dump. The keys' readings: fm1-base's lib/touch.c.
  *
  * Ctl's checks: voices sound view setup_pg touch last_vel at chan vel octave program synth_program dirty sustain
  * sus_lock playing bank tempo arp scale track patN muteN ccN valN, and clocks_out notes_out notes_on (since the
  * script's last "out"). Its command: fixed (Touch off: the keys at the fixed velocity, no aftertouch; Touch is on
  * by default, and scenarios about the notes tap too quickly to be sensed). */
-
-/* ------------------------------------------------- the keys, sensed --- */
-/* with Touch on, what Velo's sensing would read from the FM-1 (MONK-1's emulator): a pulled-up sample under
- * PRESS, a driven one at the depth the key's calibration maps to its velocity, then deeper by the lean that ui.c's
- * pressure() reads as its pressure; the top seven keys through the probe */
-#define PULL_DOWN 300u
-#define ANALOG 0xFFFFFu                  /* keys 0..19 on the analog rows (plat_analog_mask) */
-static uint8_t k_vel[NKEYS];             /* 0 = up; else the velocity it lands with */
-static float k_press[NKEYS];             /* 0..1 */
-static uint16_t k_land[NKEYS];
-static uint32_t k_t0[NKEYS];
-
-static uint16_t land_for(uint32_t k, uint32_t v)   /* sense_velocity_d, inverted */
-{
-    const sense_key_t *s = &sn_key[k];
-    float r0 = (float)(s->dfloor > SN_DBASE ? s->dfloor - SN_DBASE : 1u), r1 = (float)(s->dceil - SN_DBASE);
-    float c = (float)(sn_cfg.d_curve ? sn_cfg.d_curve : 1u) * 0.01f, t;
-    if (v >= 127u)
-        return (uint16_t)(s->dfloor > 1u ? s->dfloor - 1u : 1u);
-    t = 1.0f - fm_powf(((float)v - 1.0f) / 126.0f, 1.0f / c);
-    return (uint16_t)(SN_DBASE + (uint32_t)(r0 * fm_powf(r1 / r0, t) + 0.5f));
-}
-
-void app_host_tick(void)                 /* every 2 ms: each analog key's samples */
-{
-    uint32_t k, now = plat_ms();
-    if (now & 1u)
-        return;
-    for (k = 0; k < NKEYS; k++) {
-        if (!(ANALOG >> k & 1u))
-            continue;
-        if (!k_vel[k]) {
-            if (sn_key[k].st != SN_OPEN)
-                sense_sample(k, 1023u, now * 24000u, 0);
-            continue;
-        }
-        if (sn_key[k].st == SN_OPEN) {
-            k_land[k] = land_for(k, k_vel[k]);
-            k_t0[k] = 0;
-        }
-        sense_sample(k, PULL_DOWN, now * 24000u, 0);
-        if (sense_want_drive(k)) {
-            uint32_t d = k_land[k];
-            if (sn_key[k].st == SN_DOWN && !k_t0[k])
-                k_t0[k] = now;
-            if (k_t0[k] && now - k_t0[k] > P_SETTLE + 20u && p_on[k] && k_press[k] > 0.0f) {
-                float lean = P_DEAD + k_press[k] * P_SPAN(0.5f + (float)proj.at_sens * 0.09f);
-                float r = p_base[k] / fm_exp2f(lean);
-                d = SN_DBASE + (uint32_t)(r > 2.0f ? r : 2.0f);
-            }
-            sense_sample(k, d, now * 24000u, 1);
-        }
-    }
-}
-
-/* key k: vel 0 = up, else held, landed at vel; press 0..100 % */
-void app_host_key(uint32_t k, uint32_t vel, uint32_t press)
-{
-    if (k >= NKEYS)
-        return;
-    k_vel[k] = (uint8_t)(vel > 127u ? 127u : vel);
-    k_press[k] = (float)(press > 100u ? 100u : press) * 0.01f;
-    if (vel && !(ANALOG >> k & 1u)) {    /* the probe's rise above its open reading that maps to vel (the curve inverted) */
-        uint32_t lo = sn_cfg.t_lo, hi = sn_cfg.t_hi > lo ? sn_cfg.t_hi : lo + 1u, i;
-        float c = (float)(sn_cfg.t_curve ? sn_cfg.t_curve : sn_cfg.d_curve ? sn_cfg.d_curve : 1u) * 0.01f;
-        float x = fm_powf(((float)k_vel[k] - 1.0f) / 126.0f, 1.0f / c);
-        for (i = 0; i < 8u; i++)
-            sense_probe(k, 100u, 0);
-        sense_probe(k, 100u + lo + (uint32_t)((float)(hi - lo) * x + 0.5f), 1);
-    } else if (!(ANALOG >> k & 1u)) {
-        sense_probe(k, 100u, 0);
-    }
-}
 
 /* ------------------------------------------------------------ checks --- */
 static int out_count(int what)           /* since the script's last "out": 0 clocks, 1 note-ons, 2 notes still on */

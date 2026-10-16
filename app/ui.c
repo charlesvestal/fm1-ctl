@@ -353,67 +353,26 @@ static void midi_in(void)
 }
 
 /* ------------------------------------------------------------ touch --- */
-/* velocity and aftertouch from the keys (MONK-1's sensing and its pressure(), sense.c). The scan samples
- * the analog rows only while one of them is on. */
-static uint8_t touch_live;             /* the scan is sampling (plat_sense) */
+/* velocity and aftertouch from the keys (fm1-base's lib/touch.h: MONK-1's sensing and pressure, with the
+ * settings tuned on CTL-1). The scan samples the analog rows only while one of them is on. */
+#define touch_live touch_is_on()       /* the scan is sampling (plat_sense) */
 static int touch_wanted(void) { return proj.touch || proj.at_mode != AT_OFF; }
 
-/* the scale, tuned by playing (2026-10-15, on a debug page since removed): the analog keys' driven reading
- * for 127 (DRIVE 2's own floor of 450 sat under the firm presses, ~547, so the hardest hit topped out near
- * 95) and for 1, the curve's exponent x 100 at Curve 0; the top row's probe 0 / 43, its exponent 2.40 */
-#define TUNE_FIRM 530u
-#define TUNE_LIGHT 896u
-#define TUNE_CURVE 70.0f
-
-/* MONK-1's settings (as Velo measured best); the curve's exponent from Curve: x 2 at +5, / 2 at -5 */
-static void touch_config(void)
-{
-    sn_cfg.touch = 900;
-    sn_cfg.press = 400;
-    sn_cfg.release = 600;
-    sn_cfg.wait = 2;
-    sn_cfg.v_lo = 0;
-    sn_cfg.v_hi = 72;
-    sn_cfg.vmax = 127;
-    sn_cfg.at_range = 32;
-    sn_cfg.drive = 2;
-    sn_cfg.d_curve = (uint16_t)(TUNE_CURVE * fm_exp2f((float)proj.vel_curve * 0.2f) + 0.5f);
-    sn_cfg.d_ceil = TUNE_LIGHT;
-    sn_cfg.d_floor = TUNE_FIRM;
-    sn_cfg.d_at_range = 64;
-    sn_cfg.t_lo = 0;                         /* the top row's probe: */
-    sn_cfg.t_hi = 43;                        /* firm presses pile up at 43..45 */
-    sn_cfg.t_curve = 240;
-    sn_cfg.learn = 0;
-}
-
-/* the sampling on or off as Touch asks; the keys change hands (sense.c or the digital edge): all up */
+/* the sampling on or off as Touch asks; the keys change hands (touch.c or the digital edge): all up */
 static void touch_apply(void)
 {
     int want = touch_wanted();
-    touch_config();
+    touch_curve(proj.vel_curve);
+    touch_sens(proj.at_sens);
     if (want == touch_live)
         return;
     all_keys_up();
-    if (want) {
-        sense_init(plat_analog_mask());          /* fresh key states: nothing was sampled while off */
-        touch_config();
-        sense_cal_reset();
-    }
-    plat_sense(want);
-    touch_live = (uint8_t)want;
+    touch_on(want);
 }
 
-/* pressure, every 5 ms (MONK-1's, ui.c): counted from where the key rests, not from where it landed (a key
- * goes on settling after the note), so the zero follows the driven reading down for P_SETTLE ms, then creeps
- * after it, and comes back up at once when the key is eased. The lean is the pill's resistance below its
- * rest on a log scale: P_DEAD of an octave is noise, P_SPAN more is 127. Smoothed over ~30 ms. */
-#define P_SETTLE 250u                  /* ms */
-#define P_DEAD 0.04f                   /* octaves of resistance */
-#define P_SPAN(s) (0.8f * (1.0f - 0.85f * (s)))   /* 0..1: 0.8 .. 0.12 octave */
-static float p_base[NKEYS], p_s[NKEYS];
-static uint32_t p_t0[NKEYS];
-static uint8_t at_sent[NKEYS], p_on[NKEYS], at_chan;
+/* aftertouch, as touch.c measures each key's pressure (every 5 ms): poly to the key's notes, or the
+ * hardest-pressed key's as channel pressure */
+static uint8_t at_sent[NKEYS], at_chan;
 static uint32_t at_t;
 
 static void at_off(void)               /* aftertouch back to 0 where it was sent */
@@ -433,37 +392,21 @@ static void at_off(void)               /* aftertouch back to 0 where it was sent
 static void pressure(void)
 {
     uint32_t i, now = plat_ms();
-    float sens = 0.5f + (float)proj.at_sens * 0.09f;
     uint8_t top = 0;
+    touch_update();
     if (proj.at_mode == AT_OFF || now - at_t < 5u)
         return;
     at_t = now;
     for (i = 0; i < NKEYS; i++) {
-        float d, lean, x;
         uint8_t p;
         int j;
-        if (!sense_is_analog(i))
+        if (!touch_sensed(i))
             continue;
-        if (sn_key[i].st != SN_DOWN || !sn_key[i].dn || ui.kmode[i] == KM_NONE) {
-            p_on[i] = 0;
-            p_s[i] = 0.0f;
+        if (!touch_down(i) || ui.kmode[i] == KM_NONE) {
             at_sent[i] = 0;
             continue;
         }
-        d = (float)(sn_key[i].d > SN_DBASE + 1u ? sn_key[i].d - SN_DBASE : 1u);
-        if (!p_on[i]) {
-            p_on[i] = 1;
-            p_base[i] = d;
-            p_t0[i] = now;
-        }
-        if (d > p_base[i])
-            p_base[i] = d;                                     /* eased off: that is the rest now */
-        else
-            p_base[i] += (d - p_base[i]) * (now - p_t0[i] < P_SETTLE ? 0.25f : 0.0008f);
-        lean = fm_log2f(p_base[i] / d);
-        x = fm_clampf((lean - P_DEAD) / P_SPAN(sens), 0.0f, 1.0f);
-        p_s[i] += (x - p_s[i]) * 0.17f;
-        p = (uint8_t)(p_s[i] * 127.0f + 0.5f);
+        p = touch_pressure(i);
         if (p > top)
             top = p;
         if (p != at_sent[i]) {
@@ -479,21 +422,21 @@ static void pressure(void)
     }
 }
 
-/* the analog keys' notes, as sense.c finds them (off the Sequencer page: there the keys edit, at the contact) */
+/* the analog keys' notes, as touch.c finds them (off the Sequencer page: there the keys edit, at the contact) */
 static void touch_events(void)
 {
-    sense_ev_t e;
+    touch_ev_t e;
     if (!touch_live)
         return;
-    while (sense_take(&e)) {
-        if (ui.view == V_SEQ || e.key >= NKEYS)
+    while (touch_take(&e)) {
+        if (ui.view == V_SEQ)
             continue;
-        if (e.type == EV_ON) {
+        if (e.type == TOUCH_PRESS) {
             uint32_t v = proj.touch ? e.vel : proj.vel;
             ui.last_vel = e.vel;
             key_up(e.key);                       /* a retrigger (the key bounced back open) */
             key_down(e.key, v);
-        } else if (e.type == EV_OFF) {
+        } else {
             key_up(e.key);
         }
     }
@@ -504,7 +447,7 @@ static void touch_events(void)
 static uint32_t edge_vel(uint32_t k)
 {
     uint32_t v;
-    if (touch_live && proj.touch && (v = sense_probe_velocity(k)) != 0) {
+    if (touch_live && proj.touch && (v = touch_vel_contact(k)) != 0) {
         ui.last_vel = (uint8_t)v;
         return v;
     }
@@ -900,8 +843,8 @@ static void input(void)
     ui.keys = keys;
     for (i = 0; i < NKEYS; i++)
         if (ch >> i & 1u) {
-            if (ui.view != V_SEQ && touch_live && sense_is_analog(i))
-                continue;                        /* sense.c plays it (touch_events) */
+            if (ui.view != V_SEQ && touch_live && touch_sensed(i))
+                continue;                        /* touch.c plays it (touch_events) */
             if (keys >> i & 1u) {
                 if (ui.view == V_SEQ)
                     seq_key((int)i);
@@ -2292,8 +2235,7 @@ void ui_init(void)
     ui.master_sent = -1;
     ui.master_raw = (int32_t)plat_master();
     lcd_fill(0, 0, 240, 240, K_BG);
-    touch_live = 0;
-    plat_sense(0);
+    touch_on(0);
     touch_apply();                       /* Touch as saved */
     synth_program();                     /* the saved program, which the screen shows */
 }

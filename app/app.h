@@ -111,19 +111,13 @@ void app_quiet(int32_t *lr, uint32_t n);
 void app_overload(void);
 #define APP_SPLASH                       /* the name on paper, underlined */
 void app_splash(void);
-#define APP_KEY_SENSE                    /* velocity and aftertouch from the keys (sense.c) */
-void app_key_sample(uint32_t key, uint32_t v, uint32_t ticks, int driven);
-int app_key_drive(uint32_t key);
-void app_key_probe(uint32_t key, uint32_t v, uint32_t pressed);
-int app_key_led_ok(uint32_t key);
+#define APP_TOUCH                        /* velocity and aftertouch from the keys (fm1-base's lib/touch.h) */
 
-/* the host simulator (host.c): its checks, commands, the keys' readings, a reboot, the screen reader's dump */
+/* the host simulator (host.c): its checks, commands, a reboot, the screen reader's dump */
 #define APP_HOST_EXPECT
 int app_expect(const char *what, int *got);
 #define APP_HOST_CMD
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d);
-void app_host_key(uint32_t k, uint32_t vel, uint32_t press);
-void app_host_tick(void);
 #define APP_HOST_REBOOT
 void app_host_reboot(void);
 #define APP_HOST_SPEAKDUMP

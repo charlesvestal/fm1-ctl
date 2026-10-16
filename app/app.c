@@ -1,9 +1,8 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Charles Vestal */
-/* CTL-1 on fm1-base: the app's unity build (compiled into fm1-base's, after the platform) and the glue between
- * fm1-base's contract (app.h) and Ctl's parts: the settings (project.c), the engine (engine.c), the keys' sensing
- * (sense.c), the UI (ui.c) and the GM synth (dsp/gm.c, its own -O2 unit). */
-#include "sense.c"
+/* CTL-1 on fm1-base: the app's unity build (compiled into fm1-base's, after the platform and its lib/touch.c) and
+ * the glue between fm1-base's contract (app.h) and Ctl's parts: the settings (project.c), the engine (engine.c), the
+ * UI (ui.c) and the GM synth (dsp/gm.c, its own -O2 unit). */
 #include "project.c"
 #include "engine.c"
 #include "ui.c"
@@ -76,12 +75,6 @@ void app_splash(void)                    /* ui.c's paper and ink */
     cv_blit(0, 92);
 }
 
-/* the keys' velocity and aftertouch: the scan's readings, by key, to sense.c (from the scan's interrupt) */
-void app_key_sample(uint32_t key, uint32_t v, uint32_t ticks, int driven) { sense_sample(key, v, ticks, driven); }
-int app_key_drive(uint32_t key) { return sense_want_drive(key); }
-void app_key_probe(uint32_t key, uint32_t v, uint32_t pressed) { sense_probe(key, v, pressed); }
-int app_key_led_ok(uint32_t key) { return key >= NKEYS || sn_key[key].st == SN_OPEN; }   /* open: its column may light */
-
 #ifdef PLAT_HOST
-#include "host.c"                        /* the host simulator's part: checks, commands, the keys' readings */
+#include "host.c"                        /* the host simulator's part: checks and commands */
 #endif
