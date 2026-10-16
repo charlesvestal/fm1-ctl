@@ -10,6 +10,7 @@ set -u
 cd "$(dirname "$0")/.."
 CC="${CC:-cc}"
 PY="${PYTHON:-python3}"
+export AC79_SDK="${AC79_SDK:-$HOME/fw-AC79_AIoT_SDK}"   # the package's SDK files, as ./build.sh
 B=app/build
 OUT=$B/tests
 FAIL=0

@@ -1,4 +1,4 @@
-# the USB-only build (CT_BLE 0): Bluetooth never starts, its knob and port are hidden; USB and TRS work
+# the build without Bluetooth (--no-ble, FM1B_BLE 0): Bluetooth never starts, its knob and port are hidden; USB and TRS work
 wait 1500
 expect ble 0
 tapkey 0
