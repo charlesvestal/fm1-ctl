@@ -376,7 +376,7 @@ The page shows the last note's velocity and the pressure now, so you can see wha
 - **MIDI in** (from any of them) lights the keys, drives the clock when it's set to Ext, and plays the FM-1's
   sounds unless the Sound page says Ignored.
 
-**Connecting over Bluetooth:** on a Mac, open Audio MIDI Setup, choose Window > Show MIDI Studio, click
+To connect over Bluetooth on a Mac, open Audio MIDI Setup, choose Window > Show MIDI Studio, click
 the Bluetooth button, then Connect next to FM-1. On an iPad or iPhone, connect from a music app's
 Bluetooth MIDI settings (in GarageBand: Settings > Advanced > Bluetooth MIDI Devices). The Play page's
 BLE port says "connected", and the Setup page shows what has passed.
@@ -429,7 +429,7 @@ no sound, but USB works, so the web installer can reach it: reinstall CTL-1, or 
 back from the same page. Press PLAY to try starting CTL-1 normally again. If even safe mode fails
 twice, the FM-1 drops into the chip's own update mode, and only the rescue below can reach it.
 
-**Bluetooth off:** if CTL-1 ever crashes while Bluetooth is running, the next start leaves Bluetooth off
+If CTL-1 ever crashes while Bluetooth is running, the next start leaves Bluetooth off
 and says "BLUETOOTH OFF: IT CRASHED". Everything else works. To start it again, hold SAVE on the Setup
 page. It starts by itself again at the next restart.
 
