@@ -327,7 +327,8 @@ static void panic(void)
 /* MIDI in: forwarded (USB -> BLE, BLE -> USB, TRS -> both), noted for the lights; clock and
  * start / stop drive the engine when the clock is external */
 /* a controller heard on the channel: the knobs set to it show its value (a device that sends back, as the
- * OXI E16, stays in step) */
+ * OXI E16, stays in step). It counts as activity: the autosave waits for the device to rest too (each save stops
+ * everything for a moment, and the lights flickered while a device's knob turned) */
 static void follow_cc(uint32_t num, uint32_t v)
 {
     uint32_t b, k;
@@ -336,6 +337,7 @@ static void follow_cc(uint32_t num, uint32_t v)
             if (proj.cc[b][k] == num && proj.val[b][k] != v) {
                 proj.val[b][k] = (uint8_t)v;
                 mark_dirty();
+                ui.act_t = plat_ms();
             }
 }
 

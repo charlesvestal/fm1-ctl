@@ -32,3 +32,10 @@ midi BLE B0 07 0A
 expect val3 10
 midi BLE B1 4A 70
 expect val0 33
+# the autosave waits for the device to rest
+wait 3000
+midi BLE B0 4A 22
+wait 3000
+expect dirty 1
+wait 1500
+expect dirty 0
