@@ -1,4 +1,4 @@
-# The manual's screenshots (tools/gen_screens.sh: the USB-only build, as released, into docs/img).
+# The manual's screenshots (tools/gen_screens.sh: the build with Bluetooth, as released, into docs/img).
 wait 1500
 # Play: a controller just sent, a chord held
 spin K1 -12

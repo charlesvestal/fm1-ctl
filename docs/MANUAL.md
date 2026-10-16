@@ -2,8 +2,8 @@
 
 CTL-1 turns the M-VAVE FM-1 into a MIDI controller. The keys play notes, in any scale with its chords
 under the black keys; the knobs send controllers in four banks; an arpeggiator and a four-track
-Euclidean drum sequencer run on its clock. Everything goes out over USB, MIDI from the TRS jack is passed
-along, and the FM-1 plays it all on its own General MIDI sounds too, so it works with nothing connected.
+Euclidean drum sequencer run on its clock. Everything goes out over USB and Bluetooth, MIDI from the TRS
+jack is passed along, and the FM-1 plays it all on its own General MIDI sounds too, so it works with nothing connected.
 If you like, the keys can also sense how hard you play them, for velocity and aftertouch.
 
 ![A drawing of the FM-1 running CTL-1, each knob, button and key labelled with what it does; section 3, Controls, says the same in words](img/fm1-panel.svg "The FM-1 (a drawing), running CTL-1, each control labelled")
@@ -51,12 +51,12 @@ updater, M-UPGRADE, works too.
 
 <details><summary>Install from the command line</summary>
 
-Download the firmware file (for example `ctl-usb-0.9.fwsc`) from the
+Download the firmware file (`ctl-VERSION.fwsc`) from the
 [releases page](https://github.com/charlesvestal/fm1-ctl/releases), get the CTL-1 source from GitHub,
 install Python 3 with `pip3 install mido python-rtmidi`, and run:
 
 ```
-python3 tools/fm1_install.py ctl-usb-0.9.fwsc
+python3 base/tools/fm1_install.py ctl-VERSION.fwsc
 ```
 
 </details>
@@ -116,7 +116,7 @@ Each page has its own button, and that button lights while you're on the page.
 
 ## 4. The screen
 
-![The Play page on MIDI channel 1: Note E4 100; a chord lit on the keys; USB and TRS (in only); lowest key F3, sound Acoustic Grand; bank A: CC 74 at 52, CC 71 at 70 (highlighted), CC 1 at 0, CC 7 at 100](img/screen-play.png "The Play page: a chord held, KNOB 2 just turned")
+![The Play page on MIDI channel 1: Note E4 100; a chord lit on the keys; USB, Bluetooth (waiting) and TRS (in only); lowest key F3, sound Acoustic Grand; bank A: CC 74 at 52, CC 71 at 70 (highlighted), CC 1 at 0, CC 7 at 100](img/screen-play.png "The Play page: a chord held, KNOB 2 just turned")
 ![SUSTAIN LOCKED across the top, CC 64 = 127 below it, and SUS LOCK beside the lowest key, D3; bank A's four controllers at the bottom](img/screen-sus.png "Sustain locked: ENV tapped twice")
 
 - **Top bar:** the page's name (on Play, the knob bank's letter in a chip), the MIDI channel in the
@@ -159,8 +159,9 @@ the octave before letting go.
 - **Panic:** press REC. It ends every held note and sends sustain off and "all notes off" on the
   keyboard's channel and the sequencer's.
 
-The Play page shows the last message you sent, the keys, and the two ports, each with a light for MIDI
-coming in and, for USB, one for MIDI going out.
+The Play page shows the last message you sent, the keys, and the three ports, each with a light for MIDI
+coming in and, for USB and Bluetooth, one for MIDI going out. Under BLE: "connected" while a computer or
+tablet is connected, "waiting" while none is.
 
 ---
 
@@ -317,9 +318,10 @@ sequencer, the Tempo knob rests, and the screen shows "EXT".
 
 ## 12. Setup
 
-Press EDIT for the Setup page. It also shows the MIDI counted in and out of each port, and the version.
+Press EDIT for the Setup page. It also shows Bluetooth: whether it's advertising or connected, the MIDI
+counted in and out over it, and its latest messages. The version is at the top right.
 
-![The Setup page: MIDI, USB in 0 out 12, TRS in 0; Tempo 112 (highlighted), Clock Int, Seq ch 10, Glow Low](img/screen-setup.png "The Setup page, the tempo just turned")
+![The Setup page: Bluetooth advertising, name FM-1, in 0 out 12, and its log; Tempo 112 (highlighted), Clock Int, Seq ch 10, Glow Low](img/screen-setup.png "The Setup page, the tempo just turned")
 
 | Knob | Sets |
 |---|---|
@@ -367,11 +369,17 @@ The page shows the last note's velocity and the pressure now, so you can see wha
 
 - **USB:** a class-compliant MIDI device, "CTL-1 FM-1": everything CTL-1 plays goes out here, and MIDI
   comes in.
-- **TRS jack:** MIDI in only (the FM-1 has no MIDI out jack). What arrives is passed on to USB.
-- **MIDI in** (from either) lights the keys, drives the clock when it's set to Ext, and plays the FM-1's
+- **Bluetooth:** Bluetooth MIDI, named "FM-1", on from the moment CTL-1 starts. Everything CTL-1 plays goes
+  out here too, and MIDI comes in. What arrives over USB is passed on to Bluetooth, and what arrives over
+  Bluetooth to USB.
+- **TRS jack:** MIDI in only (the FM-1 has no MIDI out jack). What arrives is passed on to USB and Bluetooth.
+- **MIDI in** (from any of them) lights the keys, drives the clock when it's set to Ext, and plays the FM-1's
   sounds unless the Sound page says Ignored.
 
-Bluetooth MIDI comes in a later version.
+**Connecting over Bluetooth:** on a Mac, open Audio MIDI Setup, choose Window > Show MIDI Studio, click
+the Bluetooth button, then Connect next to FM-1. On an iPad or iPhone, connect from a music app's
+Bluetooth MIDI settings (in GarageBand: Settings > Advanced > Bluetooth MIDI Devices). The Play page's
+BLE port says "connected", and the Setup page shows what has passed.
 
 What CTL-1 sends, on the keyboard's channel unless noted:
 
@@ -421,6 +429,10 @@ no sound, but USB works, so the web installer can reach it: reinstall CTL-1, or 
 back from the same page. Press PLAY to try starting CTL-1 normally again. If even safe mode fails
 twice, the FM-1 drops into the chip's own update mode, and only the rescue below can reach it.
 
+**Bluetooth off:** if CTL-1 ever crashes while Bluetooth is running, the next start leaves Bluetooth off
+and says "BLUETOOTH OFF: IT CRASHED". Everything else works. To start it again, hold SAVE on the Setup
+page. It starts by itself again at the next restart.
+
 **The computer shows another name:** a Mac that knew the FM-1 with other firmware may keep the old
 name. Remove the FM-1 in Audio MIDI Setup (Window > Show MIDI Studio) and plug it in again.
 
@@ -433,7 +445,7 @@ have.
 Open Terminal, paste this line and press Return:
 
 ```
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/charlesvestal/fm1-ctl/main/tools/fm1_rescue.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/hugelton/felucca-bsp/main/tools/fm1_rescue.sh)"
 ```
 
 1. If a window asks to install the command line developer tools, click Install. When it has finished,
@@ -489,12 +501,15 @@ USB lines) can still reach it.
 
 ## 17. Credits
 
-CTL-1 is free software under the GNU General Public License, version 3. If you share the firmware, you
-must also share its source code.
+CTL-1 is free software under the Mozilla Public License 2.0. If you share a changed version, you must
+also share the source of the files you changed.
 
-- The platform (hardware layer, USB, update loader, installer and storage) is from **Felucca** by Leo
-  Kuroshita, Hügelton Instruments, by way of [X0X](https://charlesvestal.github.io/fm1-x0x/) and
-  [FoMni-1](https://charlesvestal.github.io/fm1-fomni/). The top bar and knob row come from X0X.
+- The platform (hardware layer, USB, update loader, installer and storage) is
+  [fm1-base](https://github.com/charlesvestal/fm1-base) on [felucca-bsp](https://github.com/hugelton/felucca-bsp),
+  from **Felucca** by Leo Kuroshita, Hügelton Instruments, by way of
+  [X0X](https://charlesvestal.github.io/fm1-x0x/) and [FoMni-1](https://charlesvestal.github.io/fm1-fomni/).
+  The top bar and knob row come from X0X.
+- Bluetooth runs on **JieLi's Bluetooth libraries** from the AC79 SDK (Apache-2.0, Zhuhai Jieli Technology).
 - The General MIDI sounds are **Sonivox EAS** and its 200 KB sound set (Apache-2.0, Sonic Network and
   the Android Open Source Project).
 - The Euclidean rhythms are Godfried Toussaint's reading of Bjorklund's algorithm.
