@@ -55,7 +55,7 @@ void app_ui_init(void)
     static uint8_t booted;
     ui_init();
     if (!booted && FM1B_BLE && plat_ble_state() == BLE_OFF)
-        ui_say("BLUETOOTH OFF:", "IT CRASHED");   /* not twice in a row: SAVE held on Setup starts it */
+        ui_say("BLUETOOTH OFF", "AFTER A CRASH");   /* not twice in a row: SAVE on Setup's Bluetooth page starts it */
     booted = 1;
 }
 void app_frame(void) { ui_frame(); }

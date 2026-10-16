@@ -116,7 +116,7 @@ Each page has its own button, and that button lights while you're on the page.
 
 ## 4. The screen
 
-![The Play page on MIDI channel 1: Note E4 100; a chord lit on the keys; USB, Bluetooth (waiting) and TRS (in only); lowest key F3, sound Acoustic Grand; bank A: CC 74 at 52, CC 71 at 70 (highlighted), CC 1 at 0, CC 7 at 100](img/screen-play.png "The Play page: a chord held, KNOB 2 just turned")
+![The Play page on MIDI channel 1: Note E4 100; a chord lit on the keys; USB, Bluetooth (ready) and TRS (in only); lowest key F3, sound Acoustic Grand; bank A: CC 74 at 52, CC 71 at 70 (highlighted), CC 1 at 0, CC 7 at 100](img/screen-play.png "The Play page: a chord held, KNOB 2 just turned")
 ![SUSTAIN LOCKED across the top, CC 64 = 127 below it, and SUS LOCK beside the lowest key, D3; bank A's four controllers at the bottom](img/screen-sus.png "Sustain locked: ENV tapped twice")
 
 - **Top bar:** the page's name (on Play, the knob bank's letter in a chip), the MIDI channel in the
@@ -160,8 +160,8 @@ the octave before letting go.
   keyboard's channel and the sequencer's.
 
 The Play page shows the last message you sent, the keys, and the three ports, each with a light for MIDI
-coming in and, for USB and Bluetooth, one for MIDI going out. Under BLE: "connected" while a computer or
-tablet is connected, "waiting" while none is.
+coming in and, for USB and Bluetooth, one for MIDI going out. Under BLE: "connected" while a computer, a
+tablet or a Bluetooth MIDI device is connected, "ready" while none is.
 
 ---
 
@@ -318,10 +318,10 @@ sequencer, the Tempo knob rests, and the screen shows "EXT".
 
 ## 12. Setup
 
-Press GLO for the Setup page. It also shows Bluetooth: whether it's advertising or connected, the MIDI
-counted in and out over it, and its latest messages. The version is at the top right.
+Press GLO for the Setup page. It also counts the MIDI messages each port has carried in and out (USB,
+Bluetooth, TRS), a quick way to see that a cable or a connection works. The version is at the top right.
 
-![The Setup page: Bluetooth advertising, name FM-1, in 0 out 12, and its log; Tempo 112 (highlighted), Clock Int, Seq ch 10, Glow Low](img/screen-setup.png "The Setup page, the tempo just turned")
+![The Setup page: MIDI counted in and out over USB, Bluetooth and TRS; Tempo 112 (highlighted), Clock Int, Seq ch 10, Glow Low](img/screen-setup.png "The Setup page, the tempo just turned")
 
 | Knob | Sets |
 |---|---|
@@ -363,6 +363,21 @@ The page shows the last note's velocity and the pressure now, so you can see wha
 - A lit LED changes the reading of the keys beside it, so while you hold a key, the lights in its
   column go dark each time it's read. They look slightly dimmer.
 
+### Bluetooth
+
+Turn SELECT twice on the Setup page for the Bluetooth page. Its top half is for a computer, phone or
+tablet connecting to the FM-1 (section 13 says how): it says whether one is connected. Its bottom half
+finds Bluetooth MIDI devices for CTL-1 to connect to itself: a synth, a pedal, a controller.
+
+![The Bluetooth page: a computer connected; one MIDI device found, BLE MIDI, with its signal; Device BLE MIDI, Bluetooth On](img/screen-bt.png "The Bluetooth page: a computer connected, a device found")
+
+1. Put the device in its pairing mode. It appears in the list, with bars for its signal.
+2. Turn KNOB 1 to pick it, and press SAVE. The top bar says CONNECTING, then CONNECTED.
+3. Press SAVE again to let it go.
+
+Everything CTL-1 plays goes to the device and to a connected computer alike. KNOB 4 turns Bluetooth off
+or on; CTL-1 starts with it as you left it.
+
 ---
 
 ## 13. MIDI
@@ -378,8 +393,8 @@ The page shows the last note's velocity and the pressure now, so you can see wha
 
 To connect over Bluetooth on a Mac, open Audio MIDI Setup, choose Window > Show MIDI Studio, click
 the Bluetooth button, then Connect next to FM-1. On an iPad or iPhone, connect from a music app's
-Bluetooth MIDI settings (in GarageBand: Settings > Advanced > Bluetooth MIDI Devices). The Play page's
-BLE port says "connected", and the Setup page shows what has passed.
+Bluetooth MIDI settings (in GarageBand: Settings > Advanced > Bluetooth MIDI Devices). The top bar says
+COMPUTER CONNECTED, the Play page's BLE port says "connected", and the Setup page counts what has passed.
 
 What CTL-1 sends, on the keyboard's channel unless noted:
 
@@ -430,8 +445,8 @@ back from the same page. Press PLAY to try starting CTL-1 normally again. If eve
 twice, the FM-1 drops into the chip's own update mode, and only the rescue below can reach it.
 
 If CTL-1 ever crashes while Bluetooth is running, the next start leaves Bluetooth off
-and says "BLUETOOTH OFF: IT CRASHED". Everything else works. To start it again, hold SAVE on the Setup
-page. It starts by itself again at the next restart.
+and says "BLUETOOTH OFF AFTER A CRASH". Everything else works. To start it again, press SAVE on the
+Bluetooth page (or hold SAVE on the Setup page). It starts by itself again at the next restart.
 
 **The computer shows another name:** a Mac that knew the FM-1 with other firmware may keep the old
 name. Remove the FM-1 in Audio MIDI Setup (Window > Show MIDI Studio) and plug it in again.

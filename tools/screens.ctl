@@ -68,7 +68,12 @@ wait 700
 shot screen-touch.png
 key 4 up
 wait 50
-turn SELECT -1
+# Bluetooth: a computer connected, a MIDI device found
+ble connect
+turn SELECT 1
+wait 1300
+shot screen-bt.png
+turn SELECT -2
 # ENV tapped twice: sustain locked
 tap HOME
 wait 1300
