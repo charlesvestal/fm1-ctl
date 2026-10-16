@@ -65,7 +65,8 @@ typedef struct {
     uint8_t at_mode;                     /* AT_*: the keys' aftertouch */
     int8_t vel_curve;                    /* -5..+5: the velocity curve, 0 as measured (+ harder to reach 127) */
     int8_t at_sens;                      /* -5..+5: how far a lean goes for full aftertouch, 0 as measured */
-    uint8_t rsv[10];                     /* room to grow */
+    uint8_t ble_off;                     /* Bluetooth switched off (Setup, Bluetooth page); 0, the default: on */
+    uint8_t rsv[9];                      /* room to grow */
 } project_t;
 
 extern project_t proj;
@@ -103,6 +104,7 @@ void app_frame(void);
 void app_input_only(void);
 void app_say(const char *a, const char *b);
 #define APP_GAIN(m) (proj.master_cc ? 4096u : (m) * (m) >> 12)   /* MASTER sends a controller: full; else the volume */
+#define APP_BLE_AT_BOOT (!proj.ble_off)  /* Bluetooth at power-on: as the player left it */
 #define APP_TICK                         /* the clock, arpeggiator and sequencer (engine_tick) */
 void app_tick(void);
 #define APP_QUIET                        /* the radio's first second: the synth keeps time, silent (gm_skip) */

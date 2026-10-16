@@ -44,7 +44,11 @@ int app_expect(const char *what, int *got)
         g = 0;
         for (k = 0; k < NKEYS; k++)
             g = at_sent[k] > g ? at_sent[k] : g;
-    } else if (!strcmp(what, "chan"))
+    } else if (!strcmp(what, "ble_dev"))   /* the Bluetooth MIDI device: BLE_DEV_* (4 connected) */
+        g = plat_ble_device();
+    else if (!strcmp(what, "ble_off"))
+        g = proj.ble_off;
+    else if (!strcmp(what, "chan"))
         g = proj.chan;
     else if (!strcmp(what, "vel"))
         g = proj.vel;

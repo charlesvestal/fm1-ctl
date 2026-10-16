@@ -4,6 +4,7 @@ id_prefix = "FM-1_6"           # package identity: dev FM-1_600, releases FM-1_6
 usb_manufacturer = "CTL-1"
 usb_product = "CTL-1 FM-1"
 ble = true                     # Bluetooth MIDI; --no-ble leaves it out
+ble_central = true             # and CTL-1 connects to Bluetooth MIDI devices (Setup, Bluetooth page)
 words = "words.tsv"
 include = ["dsp", "dsp/eas"]
 device_include = ["dsp/eas/fm1inc"]   # <string.h> for Sonivox: the toolchain has no C library headers
