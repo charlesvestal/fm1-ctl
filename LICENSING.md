@@ -1,47 +1,35 @@
 # CTL-1 licensing
 
-CTL-1 (Ctl in the code) is free software. Its own code is under the GNU General Public License, version 3 only
-(`GPL-3.0-only`, full text in `LICENSE`). It is built on Felucca's platform layer (through X0X and
-FoMni) and keeps Felucca's licence.
+CTL-1 (Ctl in the code) is free software under the **Mozilla Public License 2.0** (`MPL-2.0`, full text in
+`LICENSE`), file by file. If you change one of its files and share the result, share that file's source under the
+MPL. It is built on [fm1-base](https://github.com/charlesvestal/fm1-base) and
+[felucca-bsp](https://github.com/hugelton/felucca-bsp) (`base/`, a git submodule), both MPL-2.0.
 
-**The released firmware is the USB-only build** (below). **The Bluetooth build's source can be shared;
-the built firmware cannot (yet).** It links JieLi's
-Bluetooth libraries, which are Apache-2.0 but binary only. A GPLv3 binary that contains them cannot
-come with its complete corresponding source, so nobody may distribute a built Ctl (`ctl.bin`,
-`ctl.fwsc`, or any build of it), you or anyone who builds it. The source in this repository may be
-shared under its licences: JieLi's libraries are not part of it, and the build takes them from each
-user's own copy of the AC79 SDK. Building it for your own use is fine. The routes to distributing the
-firmware: a GPLv3 section 7 additional permission from Felucca's copyright holders allowing the link
-(asked), an MIT rewrite of the platform layer, or a Bluetooth part running as a separate program.
+**Both builds may be distributed.** The MPL works file by file, so a firmware made of MPL files may also contain
+JieLi's Bluetooth libraries, which are Apache-2.0 and come as binaries only. The build with Bluetooth
+(`ctl.fwsc`) links them; the build without it (`./build.sh --no-ble`, `ctl-usb.fwsc`) doesn't, and the build
+checks that none of their code is in it. Neither library is part of this repository: the build copies them from
+each user's own AC79 SDK.
 
-**The USB-only build can be distributed.** `./build.sh --no-ble` (`ctl-usb*.fwsc`) links none of JieLi's
-Bluetooth libraries, the shim or the SDK sources derived from them (`ble/`, `firmware/src/app/ble.c`);
-the build checks that none of their symbols is in the image. What remains is GPL-3.0-only code plus the
-SDK files every Felucca firmware carries in its package (`uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin`),
-so it may be distributed under the GPL with this source, as FoMni and X0X are.
-
-The browser emulator (`web/emu/`) is built from the host simulator, which leaves the Bluetooth stack
-out; it contains no JieLi code and may be shared as it is.
+The browser emulator (`app/web/emu/`, built by fm1-base) runs the host simulator, with a stand-in for the
+Bluetooth stack; it contains no JieLi code.
 
 ## Where the code comes from
 
 | What | Origin | Licence |
 | --- | --- | --- |
-| Platform: `firmware/hal/`, `firmware/loader/`, `firmware/src/{libc,lcd,gfx,usb,storage,ota,midi_uart}.c`, `tools/` (build, package, install, rescue), `web/fm1*.js`, `web/make_site.py`, `web/ctl_installer.html` (Felucca's installer page, by way of X0X and AMB-1) | [Felucca](https://github.com/hugelton/Felucca), Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, as changed for [X0X](https://github.com/charlesvestal/fm1-x0x) and FoMni | GPL-3.0-only |
-| `firmware/src/app/{panel,plat_fm1,main_fm1}.c`, `host/ctl_host.c`, `web/emu/` | adapted from FoMni and X0X (themselves from Felucca's `panel.c`, `main.c`, `audio.c`) | GPL-3.0-only |
-| `ble/shim/`, `ble/midi/le_midi.c`, `firmware/src/app/ble.c` | fm1-ble (the Bluetooth experiment this firmware grew from) | GPL-3.0-only or MPL-2.0, at your choice (`LICENSES/MPL-2.0.txt`), with the JieLi parts below |
-| Parts of `ble/midi/le_midi.c` (from the SDK's `apps/common/ble/le_trans_data.c`, changed), `ble/shim/rf_const.c` (values from `apps/common/net/wifi_conf.c`), and the interface details repeated in `ble/shim/shim.h` and `ble/shim/misc.c` (each file's header says which) | [JieLi AC79 SDK](https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK), Copyright (c) JIELI (Zhuhai Jieli Technology Co., Ltd.) | Apache-2.0 (`LICENSES/Apache-2.0.txt`) |
-| The idea of a browser emulator for FM-1 firmware (`web/emu/`) | [Groove OS](https://www.groove-os.com/) by Peter Gombos, whose site runs its firmware in the browser; no code from it | credit only |
-| Everything else in `firmware/src/app`, `tests/` | Ctl | GPL-3.0-only |
+| The platform: `base/` (boot, USB, the TRS jack, storage, the update path, screen, panel, key sensing, Bluetooth's shim and MIDI service, the host simulator and the browser emulator, build and install tools) | [fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp), from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (@kurogedelic), Hügelton Instruments, under MPL-2.0 with his permission ([felucca-bsp#4](https://github.com/hugelton/felucca-bsp/issues/4)) | MPL-2.0 (the parts of `base/ble/` from JieLi's SDK: Apache-2.0) |
+| `web/ctl_installer.html` | Felucca's installer page, by way of X0X and AMB-1 | MPL-2.0 |
+| `app/` (`app.c`, `app.h`, `ui.c`, `engine.c`, `project.c`, `sense.c`, `host.c`, `dsp/gm.c`), `app/web/emu/`, `tests/`, `tools/` | Ctl, Charles Vestal | MPL-2.0 |
+| The idea of a browser emulator for FM-1 firmware (`app/web/emu/`) | [Groove OS](https://www.groove-os.com/) by Peter Gombos, whose site runs its firmware in the browser; no code from it | credit only |
 
 ## Third-party material
 
 | What | Licence | Where |
 | --- | --- | --- |
-| The GM synth: `firmware/src/dsp/eas/` (Sonivox EAS, its 200 KB GM sound set, `eas_host_fm1.c` our host wrapper). Changed as for Polly: the reverb and chorus sends summed in 32 bits and clamped to 16, and the effects ringing out after the last send and starting clean (`eas_voicemgt.c`, `eas_synth.h`, `eas_reverb.c`, `eas_chorus.c`); each change marked "Ctl (from Polly):" | Apache-2.0, Copyright (c) 2004-2006 Sonic Network Inc., 2008 The Android Open Source Project | `firmware/src/dsp/eas/` (`LICENSE-2.0.txt`, `NOTICE`); <https://github.com/EmbeddedSynth/sonivox> |
-| Barlow Semi Condensed (The Barlow Project Authors), the UI face | SIL OFL 1.1 | `assets/fonts/BarlowSemiCondensed-*.ttf`, `assets/fonts/Barlow-OFL.txt` |
-| Terminus (Dimitar Toshkov Zhekov), an alternative font set | SIL OFL 1.1 | `assets/fonts/ter-u*.bdf`, `assets/fonts/Terminus-LICENSE.txt` |
-| JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; the Bluetooth libraries (`btctrler.a`, `btstack.a`, `wl_rf_common.a`, `crypto_toolbox_Osize.a`, `lib_ccm_aes.a`, binary only), three config sources and the headers are copied into `build/` and linked into the app; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
+| The GM synth: `app/dsp/eas/` (Sonivox EAS, its 200 KB GM sound set, `eas_host_fm1.c` our host wrapper). Changed as for Polly: the reverb and chorus sends summed in 32 bits and clamped to 16, and the effects ringing out after the last send and starting clean (`eas_voicemgt.c`, `eas_synth.h`, `eas_reverb.c`, `eas_chorus.c`); each change marked "Ctl (from Polly):" | Apache-2.0, Copyright (c) 2004-2006 Sonic Network Inc., 2008 The Android Open Source Project | `app/dsp/eas/` (`LICENSE-2.0.txt`, `NOTICE`); <https://github.com/EmbeddedSynth/sonivox> |
+| Fonts: Barlow Semi Condensed (The Barlow Project Authors), Terminus (Dimitar Toshkov Zhekov) | SIL OFL 1.1 | `base/assets/fonts/` |
+| JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; the Bluetooth libraries (`btctrler.a`, `btstack.a`, `wl_rf_common.a`, `crypto_toolbox_Osize.a`, `lib_ccm_aes.a`, binary only), three config sources and the headers are copied into `app/build/` and linked into the app; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
 
 ## Trademarks
 
@@ -51,5 +39,5 @@ independent firmware; it is not affiliated with, endorsed by or supported by any
 
 ## Radio
 
-The USB-only build never enables the radio. The Bluetooth build enables it at start (not after a crashed
-Bluetooth run; then only when SAVE is held on the Setup page), and only as a BLE peripheral (BLE MIDI).
+The build with Bluetooth enables the radio at start (not after a crashed Bluetooth run; then only when SAVE is
+held on the Setup page), and only as a BLE peripheral (BLE MIDI). The build without it never enables the radio.
