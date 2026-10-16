@@ -1,19 +1,19 @@
 #!/bin/sh
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (C) 2026 Charles Vestal
 # Build the GitHub Pages site for release VERSION (tools/make_pages.py) and push it to the gh-pages
 # branch of origin, replacing what was there (the branch holds only the generated site).
-#   tools/publish_pages.sh 0.9          (after ./build.sh --no-ble --release 0.9: the USB-only build, the one
-#                                       that may be distributed)
+#   tools/publish_pages.sh 0.9          (after ./build.sh --release 0.9)
 set -e
 cd "$(dirname "$0")/.."
 V="${1:?usage: tools/publish_pages.sh VERSION}"
-PKG="build/ctl-usb-$V.fwsc"
-[ -f "$PKG" ] || { echo "no $PKG: run ./build.sh --no-ble --release $V first"; exit 1; }
-CT_BLE=0 CT_VERSION="$V" sh web/emu/build.sh
-python3 tools/make_pages.py "$PKG" "$V" build/pages
+PKG="app/build/ctl-$V.fwsc"
+[ -f "$PKG" ] || { echo "no $PKG: run ./build.sh --release $V first"; exit 1; }
+sh build.sh --web --release "$V"
+"${PYTHON:-python3}" tools/make_pages.py "$PKG" "$V" app/build/pages
 REMOTE="$(git remote get-url origin)"
 SHA="$(git rev-parse --short HEAD)"
-cd build/pages
+cd app/build/pages
 rm -rf .git
 git init -q -b gh-pages
 git add -A

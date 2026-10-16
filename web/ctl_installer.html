@@ -1,6 +1,7 @@
 <!doctype html>
-<!-- SPDX-License-Identifier: GPL-3.0-only
+<!-- SPDX-License-Identifier: MPL-2.0
      Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+     Copyright (C) 2026 Charles Vestal (CTL-1's)
      CTL-1: Felucca's installer page (web/index_pkg.html, by way of X0X and AMB-1), branded for CTL-1, English first.
      tools/make_pages.py inlines fm1pkg.js and fm1ota.js and the package's metadata. -->
 <html lang="en">
@@ -70,7 +71,7 @@
   <p><button id="stockgo" type="button" disabled data-t="stockinstall"></button></p>
   <p><a href="../" style="color:inherit" data-t="manual"></a></p>
   <p class="small">CTL-1 is built on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments<span class="sr" data-t="newtab"></span></a>,
-    by way of X0X and FoMni. Its General MIDI sounds are Sonivox EAS (Apache-2.0).<br>
+    by way of fm1-base and felucca-bsp. Its General MIDI sounds are Sonivox EAS (Apache-2.0); Bluetooth runs on JieLi's libraries (Apache-2.0).<br>
     Fonts: Barlow Semi Condensed (SIL OFL 1.1). M-VAVE and FM-1 are trademarks of their respective owners.<br>
     <span data-t="license"></span> <a href="https://github.com/charlesvestal/fm1-ctl" target="_blank" rel="noopener" style="color:inherit">github.com/charlesvestal/fm1-ctl<span class="sr" data-t="newtab"></span></a></p>
 </main>
@@ -113,7 +114,7 @@ const TEXT = {
     mismatch: "書き込みは終わりましたが、FM-1 が別のバージョンを報告しています: ",
     badpkg: "インストールするファイルが壊れています。ページを再読み込みしてください。",
     leave: "書き込み中です。ページを閉じないでください。",
-    license: "GPL-3.0、無保証。ソース:",
+    license: "MPL-2.0、無保証。ソース:",
   },
   en: {
     intro: "Connect the FM-1 by USB. (Works in Chrome or Edge.)",
@@ -150,7 +151,7 @@ const TEXT = {
     mismatch: "Written, but the FM-1 reports another version: ",
     badpkg: "The file to install is damaged. Reload the page.",
     leave: "Writing. Do not close the page.",
-    license: "GPL-3.0, no warranty. Source:",
+    license: "MPL-2.0, no warranty. Source:",
   },
 };
 let lang = "en";                                 /* English first; 日本語 is a click away */

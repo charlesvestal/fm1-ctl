@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (C) 2026 Charles Vestal
 """Make the CTL-1 site for GitHub Pages (https://charlesvestal.github.io/fm1-ctl/):
 
   index.html                     what CTL-1 is, and the ways in: try, install, manual, download, source
   img/                           screenshots (docs/img)
-  emu/                           CTL-1 in the browser (build/emu, from web/emu/build.sh with CT_BLE=0), with
+  emu/                           CTL-1 in the browser (app/build/emu, from ./build.sh --web), with
                                  fm1-reader's words.js, tts.js and eSpeak NG for its screen reader
-  words/                         the screen reader's words files (web/words, from firmware/words.tsv)
-  install/index.html             the web installer (web/ctl_installer.html, with fm1pkg.js, fm1ota.js and
-                                 the package's metadata inlined; Chrome or Edge, Web MIDI)
-  manual/index.html, img/        the manual (tools/manual_html.py, from docs/MANUAL.md)
-  firmware/ctl-usb-VERSION.fwsc  the package the installer writes; also the download
+  words/                         the screen reader's words files (app/web/words, from app/words.tsv)
+  install/index.html             the web installer (web/ctl_installer.html, with fm1-base's fm1pkg.js and
+                                 fm1ota.js and the package's metadata inlined; Chrome or Edge, Web MIDI)
+  manual/index.html, img/        the manual (fm1-base's tools/manual_html.py, from docs/MANUAL.md)
+  firmware/ctl-VERSION.fwsc      the package the installer writes; also the download
 
-  tools/make_pages.py build/ctl-usb-0.9.fwsc 0.9 OUT_DIR
+  tools/make_pages.py app/build/ctl-0.9.fwsc 0.9 OUT_DIR
 
-The package must be a USB-only release build (./build.sh --no-ble --release X.Y): the only one that may
-be distributed (LICENSING.md). Its identity, FM-1_6XXYYZZ, is what the installer checks the download
-against and what the FM-1 reports after the install."""
+The package must be a release build (./build.sh --release X.Y): its identity, FM-1_6XXYYZZ, is what the
+installer checks the download against and what the FM-1 reports after the install."""
 import html
 import json
 import re
@@ -26,8 +26,9 @@ import sys
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(SRC / "web"))
-from make_site import product_of, strip_module  # noqa: E402  (Felucca's: the package format)
+BASE = SRC / "base"                                       # fm1-base (git submodule)
+sys.path.insert(0, str(BASE / "tools"))
+from make_site import product_of, strip_module  # noqa: E402  (the package format)
 
 REPO = "https://github.com/charlesvestal/fm1-ctl"
 
@@ -77,7 +78,7 @@ code { font-size: .9em; }
 <h1>CTL-1</h1>
 <p class="sub">A MIDI controller for the M-VAVE FM-1</p>
 <p class="lede">The FM-1's keys, knobs and buttons as a MIDI controller: notes in any scale with its chords under
-the black keys, four banks of knobs, an arpeggiator and a Euclidean drum sequencer, over USB. And General MIDI
+the black keys, four banks of knobs, an arpeggiator and a Euclidean drum sequencer, over USB and Bluetooth. And General MIDI
 sounds of its own, so it plays with nothing connected.</p>
 <div class="shots">
   <img src="img/screen-play.png" width="240" height="240" alt="CTL-1's Play page: Note E4 100, a chord lit on the keys; bank A: CC 74 at 52, CC 71 at 70, CC 1 at 0, CC 7 at 100">
@@ -89,7 +90,7 @@ sounds of its own, so it plays with nothing connected.</p>
   <a href="install/"><strong>Install <em class="v">v__VERSION__</em></strong><span>From Chrome or Edge, with the FM-1 connected by USB. Nothing to install on the computer.</span></a>
   <a href="manual/"><strong>Manual</strong><span>Getting started in a few minutes, then everything else.</span></a>
   <a href="firmware/__PKG__"><strong>Download <em class="v">__PKG__</em></strong><span>For the command-line installer: <code>python3 tools/fm1_install.py __PKG__</code></span></a>
-  <a href="__REPO__"><strong>Source</strong><span>GitHub, GPL-3.0. Built on Felucca by Hügelton Instruments.</span></a>
+  <a href="__REPO__"><strong>Source</strong><span>GitHub, MPL-2.0. Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita, Hügelton Instruments.</span></a>
 </nav>
 
 <h2>What it does</h2>
@@ -101,7 +102,7 @@ sounds of its own, so it plays with nothing connected.</p>
   <li><b>Clock.</b> Its own, sent as MIDI clock with start and stop, or following yours.</li>
   <li><b>Sounds.</b> The 128 General MIDI sounds and the drum kit (Sonivox EAS), through the FM-1's speaker and headphones: PRESETS picks one.</li>
 </ul>
-<p>USB MIDI out and in, and the TRS jack's MIDI in passed on to USB. Bluetooth MIDI comes in a later version.</p>
+<p>MIDI out and in over USB and Bluetooth, and the TRS jack's MIDI in passed on.</p>
 <p class="small">To go back to the official firmware, use the installer's "Back to the stock firmware", or
 M-VAVE's updater, M-UPGRADE, from <a href="https://www.m-vave.com/download">m-vave.com/download</a>.
 M-VAVE and FM-1 are trademarks of their owners. CTL-1 is not affiliated with M-VAVE.</p>
@@ -116,12 +117,10 @@ def main(pkg, version, out):
     raw = pkg.read_bytes()
     product = product_of(raw)
     if not re.fullmatch(r"FM-1_6\d{6}", product):
-        raise SystemExit(f"{pkg}: identity {product!r}: make a release build (./build.sh --no-ble --release X.Y)")
-    if not pkg.name.startswith("ctl-usb-"):
-        raise SystemExit(f"{pkg}: only the USB-only build may be published (./build.sh --no-ble --release X.Y)")
+        raise SystemExit(f"{pkg}: identity {product!r}: make a release build (./build.sh --release X.Y)")
     if b"FELUCCA-LOADER-1" not in raw:
         raise SystemExit(f"{pkg}: no update loader in it")
-    name = f"ctl-usb-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
+    name = pkg.name
     if out.exists():
         shutil.rmtree(out)
     for d in ("install", "manual", "firmware"):
@@ -129,30 +128,31 @@ def main(pkg, version, out):
     shutil.copy(pkg, out / "firmware" / name)
     # the installer
     page = (SRC / "web" / "ctl_installer.html").read_text(encoding="utf-8")
-    lib = strip_module((SRC / "web" / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
-        strip_module((SRC / "web" / "fm1ota.js").read_text(encoding="utf-8"))
+    lib = strip_module((BASE / "web" / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
+        strip_module((BASE / "web" / "fm1ota.js").read_text(encoding="utf-8"))
     meta = json.dumps({"version": version, "product": product, "pkg": "../firmware/" + name})
     for mark in ("/*LIB*/", "/*META*/"):
         if page.count(mark) != 1:
             raise SystemExit(f"ctl_installer.html must contain {mark} once")
     (out / "install" / "index.html").write_text(page.replace("/*LIB*/", lib).replace("/*META*/", meta), encoding="utf-8")
     # the manual (a complete page; its images beside it)
-    subprocess.run([sys.executable, str(SRC / "tools" / "manual_html.py"), str(SRC / "docs" / "MANUAL.md"),
-                    str(out / "manual" / "index.html")], check=True, capture_output=True)
+    subprocess.run([sys.executable, str(BASE / "tools" / "manual_html.py"), str(SRC / "docs" / "MANUAL.md"),
+                    str(out / "manual" / "index.html"), "--name", "CTL-1", "--repo", REPO,
+                    "--tagline", "A MIDI controller for the FM-1"], check=True, capture_output=True)
     shutil.copytree(SRC / "docs" / "img", out / "manual" / "img")
     # the landing page and its screenshots
     shutil.copytree(SRC / "docs" / "img", out / "img")
     (out / "index.html").write_text(LANDING.replace("__VERSION__", html.escape(version)).replace("__PKG__", name)
                                     .replace("__REPO__", REPO), encoding="utf-8")
-    emu = SRC / "build" / "emu"
-    if not (emu / "ctl.wasm").exists():
-        raise SystemExit("no build/emu/ctl.wasm: run CT_BLE=0 web/emu/build.sh (needs Emscripten)")
-    if not (emu / "words.js").exists() or not (emu / "espeak" / "espeak.wasm").exists():
-        raise SystemExit("no build/emu/words.js or espeak/: the emulator's screen reader comes from fm1-reader "
-                         "(web/emu/build.sh copies it from ../fm1-reader/web, or set FM1_READER)")
+    emu = SRC / "app" / "build" / "emu"
+    if not (emu / "app.wasm").exists():
+        raise SystemExit("no app/build/emu/app.wasm: run ./build.sh --web (needs Emscripten)")
+    if not (emu / "reader" / "words.js").exists() or not (emu / "reader" / "espeak" / "espeak.wasm").exists():
+        raise SystemExit("no app/build/emu/reader/: the emulator's screen reader comes from fm1-reader "
+                         "(./build.sh --web copies it from an fm1-reader checkout beside this one, or set FM1_READER)")
     shutil.copytree(emu, out / "emu")
     # the screen reader's words files (fm1-reader): every one ever made, for the devices that point at them
-    shutil.copytree(SRC / "web" / "words", out / "words")
+    shutil.copytree(SRC / "app" / "web" / "words", out / "words")
     (out / ".nojekyll").write_text("")
     print(f"site: {out}: index.html, install/ ({product}), manual/, emu/, words/, firmware/{name} ({len(raw)} B)")
 
