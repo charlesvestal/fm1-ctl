@@ -1,5 +1,6 @@
-// SPDX-License-Identifier: GPL-3.0-only
-// CTL-1 in an AudioWorklet: ctl.wasm is the whole FM-1 app (web/emu/ctl_web.c). Each render quantum runs
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Charles Vestal
+// CTL-1 in an AudioWorklet: app.wasm is the whole FM-1 app (fm1-base's web/emu/emu_web.c with app/). Each render quantum runs
 // the device's clock forward by its length and plays the synth's sound for it. Between quanta the page's input
 // and MIDI go in; the MIDI sent goes out at once, and about 30 times a second the screen, the lights
 // and any saved objects.

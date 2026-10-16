@@ -604,7 +604,7 @@ async function switchOn() {
   go.textContent = "Starting...";
   try {
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
-    const [wasm] = await Promise.all([fetch("ctl.wasm").then((r) => { if (!r.ok) throw new Error(`ctl.wasm: ${r.status}`); return r.arrayBuffer(); }),
+    const [wasm] = await Promise.all([fetch("app.wasm").then((r) => { if (!r.ok) throw new Error(`app.wasm: ${r.status}`); return r.arrayBuffer(); }),
                                       ac.audioWorklet.addModule("worklet.js")]);
     node = new AudioWorkletNode(ac, "ctl", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
     out = ac.createGain();
@@ -657,7 +657,7 @@ muteBtn.addEventListener("click", () => {
 const SR = [0x7d, 0x53, 0x52], HELLO = 1, BYE = 2, WHERE = 3, SAYS = 16;
 const liveA = document.getElementById("live-a"), liveP = document.getElementById("live-p"), saidEl = document.getElementById("said");
 const whereBtn = document.getElementById("where");
-const wordsLib = import("./words.js").catch(() => null);  // (built in from fm1-reader by web/emu/build.sh)
+const wordsLib = import("./reader/words.js").catch(() => null);  // (fm1-reader's, copied in by fm1-base's build --web)
 const reader = { mode: "sr", timer: 0, words: [], ready: null, tts: null };
 try { reader.mode = localStorage.getItem("ctl-emu-reader") || "sr"; } catch { /* private */ }
 for (const r of document.querySelectorAll('input[name="reader"]')) {
@@ -678,7 +678,7 @@ function readerStop() {
 }
 async function voice() {
   if (!reader.tts) {
-    try { reader.tts = await (await import("./tts.js")).createTTS(); }
+    try { reader.tts = await (await import("./reader/tts.js")).createTTS(); }
     catch { liveA.textContent = "This page's voice could not start: use your screen reader."; return null; }
   }
   reader.tts.unlock();
