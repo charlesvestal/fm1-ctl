@@ -157,6 +157,8 @@ void gm_skip(int32_t *out, uint32_t n)
         q_r++;
         if ((st == 0xB0u || st == 0xC0u || st == 0xE0u) && held_n < HELD_N)
             held[held_n++] = m;
+        if (st == 0xC0u)
+            gm_program[m & 15u] = (uint8_t)((m >> 8) & 0x7Fu);   /* what the channel will play, known now */
     }
     skipped = 1;
     gm_level = 0;
