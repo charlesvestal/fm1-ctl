@@ -25,3 +25,10 @@ tap HOME
 wait 50
 shot thru.png
 leds
+# a controller heard on the channel: the knobs set to it follow (bank A: CC 74, 71, 1, 7)
+midi BLE B0 4A 21
+expect val0 33
+midi BLE B0 07 0A
+expect val3 10
+midi BLE B1 4A 70
+expect val0 33

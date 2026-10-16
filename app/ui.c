@@ -326,6 +326,19 @@ static void panic(void)
 
 /* MIDI in: forwarded (USB -> BLE, BLE -> USB, TRS -> both), noted for the lights; clock and
  * start / stop drive the engine when the clock is external */
+/* a controller heard on the channel: the knobs set to it show its value (a device that sends back, as the
+ * OXI E16, stays in step) */
+static void follow_cc(uint32_t num, uint32_t v)
+{
+    uint32_t b, k;
+    for (b = 0; b < NBANKS; b++)
+        for (k = 0; k < NKNOBS; k++)
+            if (proj.cc[b][k] == num && proj.val[b][k] != v) {
+                proj.val[b][k] = (uint8_t)v;
+                mark_dirty();
+            }
+}
+
 static const uint32_t THRU[NPORTS] = {TO_BLE, TO_USB, TO_USB | TO_BLE};
 static void midi_in(void)
 {
@@ -351,6 +364,8 @@ static void midi_in(void)
         } else if ((st & 0xF0u) == 0xB0u && (n == 123u || n == 120u)) {
             memset(ui.heard, 0, sizeof ui.heard);
         }
+        if ((st & 0xF0u) == 0xB0u && (st & 0x0Fu) == proj.chan)
+            follow_cc(n, v);
     }
 }
 
