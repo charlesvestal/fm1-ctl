@@ -114,6 +114,7 @@ void app_overload(void);
 #define APP_SPLASH                       /* the name on paper, underlined */
 void app_splash(void);
 #define APP_TOUCH                        /* velocity and aftertouch from the keys (fm1-base's lib/touch.h) */
+#define APP_BTDEV                        /* the Bluetooth page's devices (fm1-base's lib/btdev.h) */
 
 /* the host simulator (host.c): its checks, commands, a reboot, the screen reader's dump */
 #define APP_HOST_EXPECT

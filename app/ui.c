@@ -72,8 +72,6 @@ enum { KM_NONE, KM_NOTES, KM_ARP };    /* what a held key did: sent notes, gave 
 static struct {
     uint8_t view;
     uint8_t setup_pg;                  /* Setup's pages (SELECT): 0 the settings, 1 Touch, 2 Bluetooth */
-    uint8_t dev_pick;                  /* Bluetooth page: the device KNOB 1 picks */
-    char dev_name[21];                 /* the device connected (or being connected) */
     uint8_t last_vel;                  /* the last note's velocity from the keys (Touch shows it) */
     uint8_t track;                     /* the sequencer track the Sequencer page edits */
     uint32_t btn, keys;
@@ -90,8 +88,6 @@ static struct {
     uint32_t fx_t;                     /* when FX went down */
     uint8_t dirty;
     uint32_t act_t;
-    uint32_t in_t[NPORTS], out_t[NPORTS];   /* when each port last carried a message */
-    uint32_t n_in[NPORTS], n_out[NPORTS];
     int32_t master_raw;                /* the MASTER pot, smoothed, and the value last sent */
     int16_t master_sent;
     char last[24];                     /* the last message played here, in words */
@@ -205,16 +201,7 @@ static uint32_t pkt3(uint32_t st, uint32_t d1, uint32_t d2) { return (st >> 4) |
 /* the onboard synth on the program shown (only there: the program goes out over MIDI when PRESETS turns) */
 static void synth_program(void) { ctl_send(pkt3(0xC0u | proj.chan, proj.program, 0), TO_SYNTH); }
 
-static void send(uint32_t pkt, uint32_t to)
-{
-    uint32_t p, now = plat_ms();
-    ctl_send(pkt, to);
-    for (p = 0; p < 2u; p++)
-        if (to >> p & 1u) {
-            ui.out_t[p] = now;
-            ui.n_out[p]++;
-        }
-}
+static void send(uint32_t pkt, uint32_t to) { ctl_send(pkt, to); }   /* (fm1-base counts each port's messages) */
 static void play(uint32_t st, uint32_t d1, uint32_t d2) { send(pkt3(st | proj.chan, d1, d2), TO_USB | TO_BLE); }
 
 static void cc(uint32_t num, uint32_t v)
@@ -350,8 +337,6 @@ static void midi_in(void)
         uint32_t st = (pkt >> 8) & 0xFFu, n = (pkt >> 16) & 0x7Fu, v = pkt >> 24;
         if (port < 0 || port >= NPORTS)
             continue;
-        ui.in_t[port] = plat_ms();
-        ui.n_in[port]++;
         send(pkt & ~0xF0u, THRU[port] | TO_NOSYNTH);  /* cable 0 */
         if (!proj.in_mute)
             send(pkt & ~0xF0u, TO_SYNTH);
@@ -490,13 +475,6 @@ static const uint8_t TOUCH_KNOB[4] = {K_TOUCH, K_CURVE, K_ATM, K_ATS};   /* Setu
 /* Setup's third page (FM1B_BLE): a Bluetooth MIDI device (FM1B_BLE_CENTRAL), and Bluetooth on or off */
 static const uint8_t BT_KNOB[4] = {FM1B_BLE_CENTRAL ? K_DEV : K_NONE, K_NONE, K_NONE, K_BT};
 #define SETUP_PAGES (FM1B_BLE ? 3 : 2)
-static int dev_count(void)
-{
-    int n = 0;
-    while (n < 8 && plat_ble_found(n, 0, 0))
-        n++;
-    return n;
-}
 /* FX held on Play: the knobs set the bank's controller numbers, shown once it has been held a moment
  * (a tap to change banks does not flash them) or a knob turns */
 #define FX_HOLD_MS 400u
@@ -548,7 +526,7 @@ static int knob_get(int k)
     case K_CURVE: return proj.vel_curve;
     case K_ATM: return proj.at_mode;
     case K_ATS: return proj.at_sens;
-    case K_DEV: return ui.dev_pick;
+    case K_DEV: return btdev_pick();
     case K_BT: return !proj.ble_off;
     default: return 0;
     }
@@ -565,7 +543,7 @@ static void knob_range(int k, int *lo, int *hi)
     case K_ARATE: *hi = NRATE - 1; break;
     case K_AOCT: *lo = 1; *hi = 3; break;
     case K_SOUND: case K_SNDIN: case K_TOUCH: case K_BT: *hi = 1; break;
-    case K_DEV: *hi = dev_count() > 1 ? dev_count() - 1 : 0; break;
+    case K_DEV: *hi = btdev_count() > 1 ? btdev_count() - 1 : 0; break;
     case K_CURVE: case K_ATS: *lo = -5; *hi = 5; break;
     case K_ATM: *hi = NAT - 1; break;
     case K_TEMPO: *lo = 40; *hi = 240; break;
@@ -619,9 +597,9 @@ static void knob_text(int k, char *b)
     case K_TOUCH: put_s(b, v ? "Keys" : "Fixed"); break;
     case K_BT: put_s(b, v ? "On" : "Off"); break;
     case K_DEV:
-        if (plat_ble_device() >= BLE_DEV_CONNECTING)
-            put_s(b, ui.dev_name);       /* the one connected, or being connected */
-        else if (!plat_ble_found(v, b, 0))
+        if (btdev_busy())
+            put_s(b, btdev_name());      /* the one connected, or being connected */
+        else if (!btdev_found(v, b, 0))
             put_s(b, plat_ble_device() == BLE_DEV_SCANNING ? "Looking" : "None");
         b[10] = 0;                       /* (the knob row's width) */
         break;
@@ -713,7 +691,7 @@ static void knob_set(int k, int v)
         case K_ATM: at_off(); proj.at_mode = (uint8_t)v; touch_apply(); break;
         case K_CURVE: proj.vel_curve = (int8_t)v; touch_apply(); break;
         case K_ATS: proj.at_sens = (int8_t)v; break;
-        case K_DEV: ui.dev_pick = (uint8_t)v; return;      /* (a choice, not a setting) */
+        case K_DEV: btdev_choose(v); return;      /* (a choice, not a setting) */
         case K_BT:
             proj.ble_off = (uint8_t)!v;
             plat_ble_enable(v);
@@ -835,15 +813,8 @@ static void button_up(int b)
         ui.save_t = plat_ms();
         ui.save_long = 0;
         if (FM1B_BLE_CENTRAL && ui.view == V_SETUP && ui.setup_pg == 2) {   /* a device: connect, or let it go */
-            int d = plat_ble_device();
-            if (d == BLE_DEV_READY || d == BLE_DEV_CONNECTING || d == BLE_DEV_SEARCHING) {
-                plat_ble_disconnect();
-                say("DISCONNECTED", ui.dev_name);
-            } else if (plat_ble_found(ui.dev_pick, ui.dev_name, 0) && plat_ble_connect(ui.dev_pick) == 0) {
-                say("CONNECTING", ui.dev_name);
-            } else {
-                say("NO DEVICE", 0);
-            }
+            int ev = btdev_save();
+            say(btdev_word(ev), ev == BTDEV_NO_DEVICE ? 0 : btdev_name());
             break;
         }
         if (project_save() == 0) {
@@ -1154,7 +1125,7 @@ static int32_t tag(int32_t x, int32_t y, const char *s, uint16_t bg, uint16_t fg
     return w;
 }
 
-static int lit(const uint32_t *t, int p) { return plat_ms() - t[p] < FLASH_MS && t[p]; }
+static int lit(int p, int out) { return plat_midi_ago(p, out) < FLASH_MS; }
 
 /* the top bar (X0X's): the page's name, on Play the knob bank in a chip; the channel in the middle;
  * Bluetooth, the tempo and the play triangle on the right, a dot while unsaved. A message takes the bar. */
@@ -1253,7 +1224,7 @@ static void draw_ports(int32_t y0)
         if (!FM1B_BLE && p == PORT_BLE)
             continue;                    /* the USB-only build: USB and TRS */
         slot++;
-        int i = lit(ui.in_t, p), o = p < 2 && lit(ui.out_t, p);
+        int i = lit(p, 0), o = p < 2 && lit(p, 1);
         const char *st = "";
         uint16_t sc = K_DIM;
         cv_round(x, y0, 70, 34, 6, K_PANEL);
@@ -1417,7 +1388,7 @@ static void draw_touch(void)
 static void draw_bt(void)
 {
     char t[40];
-    int d = plat_ble_device(), n = dev_count(), i;
+    int d = plat_ble_device(), n = btdev_count(), i;
     if (proj.ble_off) {
         cv_text(10, 2, &FONT_S, "Bluetooth off", K_TEXT);
         cv_text(10, 24, &FONT_XS, "KNOB 4 turns it on. It stays as you leave it", K_DIM);
@@ -1429,16 +1400,11 @@ static void draw_bt(void)
         cv_text(10, 24, &FONT_XS, "KNOB 4 turns it off.", K_DIM);
         return;
     }
-    if (d == BLE_DEV_READY)
-        put_s(put_s(t, "Connected: "), ui.dev_name);
-    else if (d == BLE_DEV_CONNECTING || d == BLE_DEV_SEARCHING)
-        put_s(put_s(t, "Connecting: "), ui.dev_name);
-    else
-        put_s(t, n ? "MIDI devices" : "Looking for MIDI devices");
+    btdev_title(t);
     cv_text(10, 2, &FONT_S, t, d == BLE_DEV_READY ? K_COOL_D : K_TEXT);
     if (d == BLE_DEV_READY || d == BLE_DEV_CONNECTING || d == BLE_DEV_SEARCHING) {
-        char *b = put_u(put_s(t, "in "), ui.n_in[PORT_BLE]);
-        put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);
+        char *b = put_u(put_s(t, "in "), plat_midi_count(PORT_BLE, 0));
+        put_u(put_s(b, "   out "), plat_midi_count(PORT_BLE, 1));
         cv_text(10, 24, &FONT_XS, t, K_DIM);
         return;
     }
@@ -1446,9 +1412,9 @@ static void draw_bt(void)
         char name[21];
         int rssi = 0;
         plat_ble_found(i, name, &rssi);
-        if (i == ui.dev_pick)
+        if (i == btdev_pick())
             cv_round(6, 22 + i * 15, 228, 14, 4, K_PANEL);
-        cv_text(12, 23 + i * 15, &FONT_XS, name, i == ui.dev_pick ? K_TEXT : K_DIM);
+        cv_text(12, 23 + i * 15, &FONT_XS, name, i == btdev_pick() ? K_TEXT : K_DIM);
         put_s(put_u(put_s(t, "-"), (uint32_t)-rssi), " dB");
         cv_text(228 - text_w(&FONT_XS, t), 23 + i * 15, &FONT_XS, t, K_DIM);
     }
@@ -1473,10 +1439,10 @@ static void draw_setup(void)                     /* the settings below; Bluetoot
         char *b;
         cv_text(10, 2, &FONT_S, "MIDI", K_TEXT);
         cv_text(236 - text_w(&FONT_XS, "CTL-1 " APP_VERSION), 4, &FONT_XS, "CTL-1 " APP_VERSION, K_DIM);
-        b = put_u(put_s(t, "USB   in "), ui.n_in[PORT_USB]);
-        put_u(put_s(b, "   out "), ui.n_out[PORT_USB]);
+        b = put_u(put_s(t, "USB   in "), plat_midi_count(PORT_USB, 0));
+        put_u(put_s(b, "   out "), plat_midi_count(PORT_USB, 1));
         cv_text(10, 24, &FONT_XS, t, K_DIM);
-        put_u(put_s(t, "TRS   in "), ui.n_in[PORT_TRS]);
+        put_u(put_s(t, "TRS   in "), plat_midi_count(PORT_TRS, 0));
         cv_text(10, 40, &FONT_XS, t, K_DIM);
         cv_text(10, 72, &FONT_XS, "Settings save by themselves; SAVE: now.", K_DIM);
         cv_text(10, 88, &FONT_XS, "OCT- and OCT+ held 5 s: update mode.", K_DIM);
@@ -1490,8 +1456,8 @@ static void draw_setup(void)                     /* the settings below; Bluetoot
     if (s == BLE_OFF) {
         cv_text(10, 20, &FONT_XS, "Off after a crash: hold SAVE to start it", K_DIM);
     } else {
-        char *b = put_u(put_s(t, "Name FM-1   in "), ui.n_in[PORT_BLE]);
-        put_u(put_s(b, "   out "), ui.n_out[PORT_BLE]);
+        char *b = put_u(put_s(t, "Name FM-1   in "), plat_midi_count(PORT_BLE, 0));
+        put_u(put_s(b, "   out "), plat_midi_count(PORT_BLE, 1));
         cv_text(10, 20, &FONT_XS, t, K_DIM);
     }
     n = (int)plat_ble_log_total();       /* the log, the newest last (kept through a reset): seven lines, */
@@ -1535,7 +1501,7 @@ static void draw_main(void)
              (uint32_t)eng_arp_note());
     h = hash(hash_s(h, ui.last), proj.sound | (uint32_t)proj.chan << 4);
     for (p = 0; p < NPORTS; p++)
-        h = hash(h, (uint32_t)lit(ui.in_t, (int)p) | (uint32_t)lit(ui.out_t, (int)p) << 1);
+        h = hash(h, (uint32_t)lit((int)p, 0) | (uint32_t)lit((int)p, 1) << 1);
     h = hash(h, (uint32_t)plat_ble_state() | (uint32_t)plat_ble_connected() << 4 | (uint32_t)plat_ble_device() << 5);
     for (i = 0, p = (uint32_t)eng_pool(pool); i < (int)p; i++)
         h = hash(h, pool[i]);
@@ -1550,8 +1516,8 @@ static void draw_main(void)
     if (ui.view == V_SETUP && ui.setup_pg == 2) {
         char name[21];
         int k;
-        h = hash(h, (uint32_t)plat_ble_device() | (uint32_t)proj.ble_off << 4 | (uint32_t)ui.dev_pick << 8 |
-                        (ui.n_in[PORT_BLE] << 16 ^ ui.n_out[PORT_BLE]));
+        h = hash(h, (uint32_t)plat_ble_device() | (uint32_t)proj.ble_off << 4 | (uint32_t)btdev_pick() << 8 |
+                        (plat_midi_count(PORT_BLE, 0) << 16 ^ plat_midi_count(PORT_BLE, 1)));
         for (k = 0; k < 6 && plat_ble_found(k, name, 0); k++)
             h = hash_s(h, name);
     } else if (ui.view == V_SETUP && ui.setup_pg) {
@@ -1560,8 +1526,8 @@ static void draw_main(void)
             top = at_sent[k] > top ? at_sent[k] : top;
         h = hash(hash(h, 1u | ui.last_vel << 8 | top << 16), (uint32_t)touch_live | proj.touch << 1 | proj.at_mode << 2);
     } else if (ui.view == V_SETUP) {
-        h = hash(hash(h, plat_ble_log_total()), ui.n_in[PORT_BLE] ^ ui.n_out[PORT_BLE] << 16);
-        h = hash(hash(h, ui.n_in[PORT_USB] ^ ui.n_out[PORT_USB] << 16), ui.n_in[PORT_TRS]);
+        h = hash(hash(h, plat_ble_log_total()), plat_midi_count(PORT_BLE, 0) ^ plat_midi_count(PORT_BLE, 1) << 16);
+        h = hash(hash(h, plat_midi_count(PORT_USB, 0) ^ plat_midi_count(PORT_USB, 1) << 16), plat_midi_count(PORT_TRS, 0));
         for (i = 0; i < 7; i++)
             h = hash_s(h, plat_ble_log_line(i));
     }
@@ -1689,7 +1655,7 @@ static void draw_knobs(void)
         h = hash(hash(h, (uint32_t)knob_get(view_knob((int)i))), proj.cc[proj.bank][i]);
     h = hash(hash(h, (uint32_t)now_touch), (uint32_t)plat_ble_state() | proj.scale << 4);
     if (ui.view == V_SETUP && ui.setup_pg == 2)   /* the Device knob names what the scan finds */
-        h = hash(h, (uint32_t)plat_ble_device() | (uint32_t)dev_count() << 4);
+        h = hash(h, (uint32_t)plat_ble_device() | (uint32_t)btdev_count() << 4);
     if (h == ui.sig[2])
         return;
     ui.sig[2] = h;
@@ -1947,14 +1913,14 @@ static void sp_page(void)
             sp_cat(", Bluetooth off");
         else if (d == BLE_DEV_READY) {
             sp_cat(", connected to ");
-            sp_cat(ui.dev_name);
+            sp_cat(btdev_name());
         } else if (d == BLE_DEV_CONNECTING || d == BLE_DEV_SEARCHING) {
             sp_cat(", connecting to ");
-            sp_cat(ui.dev_name);
+            sp_cat(btdev_name());
         } else if (FM1B_BLE_CENTRAL) {
             sp_cat(", ");
-            sp_num((uint32_t)dev_count());
-            sp_cat(dev_count() == 1 ? " device found" : " devices found");
+            sp_num((uint32_t)btdev_count());
+            sp_cat(btdev_count() == 1 ? " device found" : " devices found");
         }
         return;
     }
@@ -2056,17 +2022,17 @@ static void sp_screen(int all)
                    s == BLE_FAILED ? "failed" : "off");
             if (s != BLE_OFF) {
                 sp_cat(", in ");
-                sp_num(ui.n_in[PORT_BLE]);
+                sp_num(plat_midi_count(PORT_BLE, 0));
                 sp_cat(", out ");
-                sp_num(ui.n_out[PORT_BLE]);
+                sp_num(plat_midi_count(PORT_BLE, 1));
             }
         }
         sp_cat(". USB in ");
-        sp_num(ui.n_in[PORT_USB]);
+        sp_num(plat_midi_count(PORT_USB, 0));
         sp_cat(", out ");
-        sp_num(ui.n_out[PORT_USB]);
+        sp_num(plat_midi_count(PORT_USB, 1));
         sp_cat(". TRS in ");
-        sp_num(ui.n_in[PORT_TRS]);
+        sp_num(plat_midi_count(PORT_TRS, 0));
         sp_cat(". CTL-1 " APP_VERSION);
         break;
     default: break;
@@ -2408,27 +2374,15 @@ void ui_frame(void)
     ui.frame++;
 }
 
-/* the Bluetooth page scans for devices while it is up (and nothing is connected) */
+/* the Bluetooth page scans for devices while it is up (fm1-base's lib/btdev); a device connected, given up or lost
+ * is said */
 static void dev_scan(void)
 {
-    int want = FM1B_BLE_CENTRAL && ui.view == V_SETUP && ui.setup_pg == 2 && !proj.ble_off &&
-               plat_ble_state() == BLE_READY, d = plat_ble_device();
-    static int was;
-    if (d != was) {                              /* a device connected, given up or lost: said */
-        if (d == BLE_DEV_READY)
-            say("CONNECTED", ui.dev_name);
-        else if (d == BLE_DEV_OFF && (was == BLE_DEV_CONNECTING || was == BLE_DEV_SEARCHING))
-            say("NO ANSWER", ui.dev_name);
-        else if (d == BLE_DEV_OFF && was == BLE_DEV_READY)
-            say("DEVICE LOST", ui.dev_name);
-        was = d;
-    }
-    if (want && d == BLE_DEV_OFF) {
-        ui.dev_pick = 0;
-        plat_ble_scan(1);
-    } else if (!want && d == BLE_DEV_SCANNING) {
-        plat_ble_scan(0);
-    }
+    int ev;
+    btdev_page(ui.view == V_SETUP && ui.setup_pg == 2 && !proj.ble_off);
+    while ((ev = btdev_event()) != BTDEV_NONE)
+        if (ev == BTDEV_CONNECTED || ev == BTDEV_NO_ANSWER || ev == BTDEV_LOST)
+            say(btdev_word(ev), btdev_name());
 }
 void ui_input_only(void)
 {
