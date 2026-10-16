@@ -1,0 +1,22 @@
+# CTL-1's build settings (fm1-base's tools/build.py: ./build.sh)
+name = "CTL"                   # the build's files: ctl.fwsc, ctl-usb.fwsc (--no-ble), ctl-X.Y.fwsc
+id_prefix = "FM-1_6"           # package identity: dev FM-1_600, releases FM-1_6XXYYZZ
+usb_manufacturer = "CTL-1"
+usb_product = "CTL-1 FM-1"
+ble = true                     # Bluetooth MIDI; --no-ble leaves it out
+words = "words.tsv"
+include = ["dsp", "dsp/eas"]
+device_include = ["dsp/eas/fm1inc"]   # <string.h> for Sonivox: the toolchain has no C library headers
+mmio_skip = ["dsp/eas/"]       # Sonivox: note, sample and table constants, not addresses
+# the GM synth (Sonivox EAS), at -O2
+o2 = ["dsp/gm.c", "dsp/eas/eas_chorus.c", "dsp/eas/eas_chorusdata.c", "dsp/eas/eas_config.c", "dsp/eas/eas_data.c",
+      "dsp/eas/eas_filter.c", "dsp/eas/eas_host_fm1.c", "dsp/eas/eas_math.c", "dsp/eas/eas_midi.c",
+      "dsp/eas/eas_mididata.c", "dsp/eas/eas_mixbuf.c", "dsp/eas/eas_mixer.c", "dsp/eas/eas_pan.c", "dsp/eas/eas_pcm.c",
+      "dsp/eas/eas_pcmdata.c", "dsp/eas/eas_public.c", "dsp/eas/eas_reverb.c", "dsp/eas/eas_reverbdata.c",
+      "dsp/eas/eas_smf.c", "dsp/eas/eas_smfdata.c", "dsp/eas/eas_sndlibmgt.c", "dsp/eas/eas_voicemgt.c",
+      "dsp/eas/eas_wtengine.c", "dsp/eas/eas_wtsynth.c", "dsp/eas/wt_200k_G.c"]
+# the site
+tagline = "A MIDI controller for the FM-1"
+repo = "https://github.com/charlesvestal/fm1-ctl"
+licence = "MPL-2.0"
+credits = "Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments); the sounds are Sonivox EAS."
