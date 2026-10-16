@@ -102,7 +102,7 @@ def panel(screen_png):
     s.append(what(766, 136, "The page's four values (on Play: four controllers)"))
     s.append(f'<rect x="568" y="146" width="400" height="236" rx="18" fill="{TRAY}"/>')
     top = [("FX", "Next bank,|hold: CCs"), ("SEL", "Keys"), ("ENV", "Sustain,|x2: lock"), ("LFO", "Mod|wheel"),
-           ("EDIT", "Setup"), ("GLO", "Sound")]
+           ("EDIT", "Sound"), ("GLO", "Setup")]
     bot = [("HOME", "Play"), ("SAVE", "Save"), ("ARP", "Arp"), ("SEQ", "Sequencer"),
            (("PLAY", "STOP"), "Start /|stop"), ("REC", "Panic")]
     for i in range(6):

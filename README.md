@@ -22,7 +22,7 @@ installer can reach.
 |---|---|
 | Keys | Notes; with a scale, its notes on the white keys and its chords on the black keys |
 | KNOB 1–4 | The page's four values; on Play, four controllers in four banks |
-| HOME · SEL · ARP · SEQ · GLO · EDIT | The pages: Play, Keys, Arp, Sequencer, Sound, Setup |
+| HOME · SEL · ARP · SEQ · EDIT · GLO | The pages: Play, Keys, Arp, Sequencer, Sound, Setup |
 | SELECT | The page's own pages: the banks on Play, the tracks on the Sequencer |
 | ALGORITHM · PRESETS · MASTER | MIDI channel · program change (the sound follows) · volume |
 | FX | The next bank; held, KNOB 1–4 set its controller numbers |

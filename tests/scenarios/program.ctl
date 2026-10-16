@@ -16,7 +16,7 @@ wait 50
 expect chan 1
 expect synth_program 4
 # Sound off (Sound page, KNOB 1): a program change still reaches it
-tap GLO
+tap EDIT
 expect view 4
 spin K1 -1
 wait 50

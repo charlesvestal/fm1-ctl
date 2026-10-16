@@ -140,7 +140,7 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
   <div>
     <h2>Pages</h2>
     <ul>
-      <li>A button each: <b>HOME</b> Play, <b>SEL</b> Keys, <b>ARP</b> Arp, <b>SEQ</b> Sequencer, <b>GLO</b> Sound, <b>EDIT</b> Setup (tempo).</li>
+      <li>A button each: <b>HOME</b> Play, <b>SEL</b> Keys, <b>ARP</b> Arp, <b>SEQ</b> Sequencer, <b>EDIT</b> Sound, <b>GLO</b> Setup (tempo).</li>
       <li><b>KNOB 1–4</b> set the four values at the bottom of the screen; on Play, four controllers in four banks.</li>
       <li><b>SELECT</b> and <b>FX</b> step through the banks; hold <b>FX</b> to set their controller numbers.</li>
     </ul>
@@ -288,7 +288,7 @@ function hit(c, group, cls, attrs, desc) {
 }
 // what each control does, on hover (the Buttons list below says the same)
 const TIP = { FX: "Next knob bank (A to D); hold: set their controller numbers", SEL: "Keys page (scale)", ENV: "Hold: sustain; tap twice: lock it",
-  LFO: "Hold: mod wheel", EDIT: "Setup page (tempo, clock)", GLO: "Sound page", HOME: "Play page", SAVE: "Save now", ARP: "Arp page",
+  LFO: "Hold: mod wheel", EDIT: "Sound page", GLO: "Setup page (tempo, clock)", HOME: "Play page", SAVE: "Save now", ARP: "Arp page",
   SEQ: "Sequencer page", PLAY: "Start / stop", REC: "All notes off", "OCT-": "Keys an octave down", "OCT+": "Keys an octave up",
   SELECT: "The page's pages: banks on Play, tracks on the Sequencer", ALGORITHM: "MIDI channel", PRESETS: "Program change (the sound follows)",
   MASTER: "Volume, or a controller (Sound page)",

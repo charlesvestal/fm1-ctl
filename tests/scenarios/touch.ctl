@@ -1,6 +1,6 @@
 # Touch (SELECT on Setup): velocity and aftertouch from the keys, on by default (Poly); the keys land at the
 # velocity the script gives them (host/ctl_host.c reads them as the FM-1's sensing would)
-tap EDIT
+tap GLO
 expect view 5
 turn SELECT 1
 expect setup_pg 1
@@ -69,7 +69,7 @@ expect notes_out 0
 tap SAVE
 reboot
 expect touch 1
-tap EDIT
+tap GLO
 turn SELECT 1
 spin K1 -1
 spin K3 -2

@@ -30,7 +30,7 @@ ex.web_keys(1 << 7); run(200); const sounding = peak; ex.web_keys(0); run(20);  
 ex.web_enc(3, 1); run(20);                                       // KNOB 1: CC 74 64 -> 65
 ex.web_midi_in(2, (0x9 | 0x90 << 8 | 60 << 16 | 99 << 24) >>> 0); run(10);   // the TRS jack: thru to USB
 // Touch on (Setup, SELECT, KNOB 1: Keys): a key that lands at 40 plays at about 40
-ex.web_buttons(1 << 4); run(10); ex.web_buttons(0); run(10);   // EDIT
+ex.web_buttons(1 << 5); run(10); ex.web_buttons(0); run(10);   // GLO
 ex.web_enc(0, 1); run(10); ex.web_enc(3, 1); run(10);
 const mark = sent.length;
 ex.web_key(7, 40, 0); run(20); ex.web_key(7, 0, 0); run(20);

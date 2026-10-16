@@ -5,7 +5,7 @@ tapkey 0
 expect_out USB 90 35 64
 midi TRS 90 3E 50
 expect_out USB 90 3E 50
-tap EDIT
+tap GLO
 expect view 5
 spin K4 1
 expect ble 0

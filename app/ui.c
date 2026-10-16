@@ -12,7 +12,7 @@
  *   PLAY          start / stop (the sequencer, MIDI start / stop)    REC  panic (all notes off)
  *   ENV           sustain while held; a double tap locks it on (a press unlocks)    OCT- / OCT+  the octave (-3..+3)
  *   LFO           the mod wheel (CC 1): up over a sixteenth while held, back down after
- *   pages         one button each: HOME Play, SEL Keys, ARP Arp, SEQ Sequencer, GLO Sound, EDIT Setup
+ *   pages         one button each: HOME Play, SEL Keys, ARP Arp, SEQ Sequencer, EDIT Sound, GLO Setup
  *   SAVE          saves (it also saves by itself, a few seconds after a change)
  *
  * Touch (SELECT on Setup): velocity and aftertouch from the keys themselves (MONK-1's sensing, from Velo:
@@ -28,7 +28,7 @@
 
 enum { V_PLAY, V_SCALE, V_ARP, V_SEQ, V_SOUND, V_SETUP, NVIEWS };
 static const char *const VIEW_NAME[NVIEWS] = {"Play", "Keys", "Arp", "Sequencer", "Sound", "Setup"};
-static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_SEL, B_ARP, B_SEQ, B_GLO, B_EDIT};
+static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_SEL, B_ARP, B_SEQ, B_EDIT, B_GLO};
 static const char *const PORT_NAME[NPORTS] = {"USB", "BLE", "TRS"};
 static const char *const NOTE_NAME[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const SCALE_NAME[NSCALES] = {"Chromatic", "Major", "Minor", "Dorian", "Mixolydian",
@@ -827,8 +827,8 @@ static void button_up(int b)
     case B_SEL: set_view(V_SCALE); break;
     case B_SEQ: set_view(V_SEQ); break;
     case B_ARP: set_view(V_ARP); break;
-    case B_GLO: set_view(V_SOUND); break;
-    case B_EDIT: set_view(V_SETUP); break;
+    case B_EDIT: set_view(V_SOUND); break;
+    case B_GLO: set_view(V_SETUP); break;
     case B_SAVE:
         ui.save_t = plat_ms();
         ui.save_long = 0;

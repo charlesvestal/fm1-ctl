@@ -45,7 +45,7 @@ wait 50
 shot seq.png
 leds
 # external clock: follows MIDI clock and start from the TRS jack
-tap EDIT
+tap GLO
 spin K2 2
 out
 wait 300

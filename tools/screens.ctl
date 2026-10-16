@@ -50,13 +50,13 @@ wait 1590
 shot screen-seq.png
 tap PLAY
 # Sound
-tap GLO
+tap EDIT
 key 2 down
 wait 1300
 shot screen-sound.png
 key 2 up
 # Setup, KNOB 1 just turned
-tap EDIT
+tap GLO
 spin K1 -8
 wait 300
 shot screen-setup.png

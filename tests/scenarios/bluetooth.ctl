@@ -2,7 +2,7 @@
 # in and passed on to USB; let go (the page looks again); Bluetooth switched off, and off again after a restart
 # (saved by itself, 4 s after the last change); on again
 wait 1500
-tap EDIT
+tap GLO
 expect view 5
 spin SELECT 1
 spin SELECT 1
@@ -29,7 +29,7 @@ wait 4500
 reboot
 wait 1500
 expect ble 0
-tap EDIT
+tap GLO
 spin SELECT 1
 spin SELECT 1
 spin K4 1

@@ -101,8 +101,8 @@ The drawing at the top shows them all; here they are in more detail.
 | SEL | Keys page: root, scale, velocity, humanize |
 | ARP | Arp page |
 | SEQ | Sequencer page |
-| GLO | Sound page |
-| EDIT | Setup page: tempo, clock, sequencer channel, glow; and Touch: velocity and aftertouch from the keys |
+| EDIT | Sound page |
+| GLO | Setup page: tempo, clock, sequencer channel, glow; and Touch: velocity and aftertouch from the keys |
 | FX | The next knob bank, A to D. Held: KNOB 1–4 set the bank's controller numbers |
 | ENV | Sustain while held. Tap it twice to lock sustain on; press it again to unlock |
 | LFO | Mod wheel: rises while held, falls when let go |
@@ -216,7 +216,7 @@ CTL-1 has the 128 General MIDI sounds and the drum kit (on channel 10), from Son
 whatever CTL-1 plays (the keys, the arpeggiator, the sequencer) through the FM-1's speaker and
 headphone jack. PRESETS picks the sound on the keyboard's channel.
 
-Press GLO for the Sound page. It shows the sound playing, how many voices sound and how busy the
+Press EDIT for the Sound page. It shows the sound playing, how many voices sound and how busy the
 processor is.
 
 ![The Sound page: Acoustic Grand, GM program 1, voices 1, CPU 0%; Sound On, MIDI in Plays, MASTER Volume](img/screen-sound.png "The Sound page")
@@ -318,7 +318,7 @@ sequencer, the Tempo knob rests, and the screen shows "EXT".
 
 ## 12. Setup
 
-Press EDIT for the Setup page. It also shows Bluetooth: whether it's advertising or connected, the MIDI
+Press GLO for the Setup page. It also shows Bluetooth: whether it's advertising or connected, the MIDI
 counted in and out over it, and its latest messages. The version is at the top right.
 
 ![The Setup page: Bluetooth advertising, name FM-1, in 0 out 12, and its log; Tempo 112 (highlighted), Clock Int, Seq ch 10, Glow Low](img/screen-setup.png "The Setup page, the tempo just turned")

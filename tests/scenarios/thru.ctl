@@ -4,7 +4,7 @@ expect notes_out 0
 midi TRS 90 3E 50
 expect_out USB 90 3E 50
 out
-tap EDIT
+tap GLO
 expect view 5
 # Bluetooth started at boot
 wait 1100

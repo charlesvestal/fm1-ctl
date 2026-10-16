@@ -15,7 +15,7 @@ tap SAVE
 expect dirty 0
 spin ALGO 3
 # the tempo: Setup, KNOB 1; SELECT: the banks on Play (stops at A and D), nothing on Setup
-tap EDIT
+tap GLO
 spin K1 10
 spin SELECT 1
 wait 50
@@ -33,7 +33,7 @@ expect bank 0
 wait 4500
 expect dirty 0
 leds
-tap EDIT
+tap GLO
 expect view 5
 spin K4 -2
 wait 50

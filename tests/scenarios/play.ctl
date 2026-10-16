@@ -47,7 +47,7 @@ out
 # MASTER: the onboard synth's volume (the default); the Sound page's KNOB 3 gives it a controller
 master 2000
 expect notes_out 0
-tap GLO
+tap EDIT
 expect view 4
 spin K1 -1
 spin K3 11
@@ -62,7 +62,7 @@ wait 200
 shot play.png
 leds
 # the onboard GM synth: Sound back on, a held key sounds
-tap GLO
+tap EDIT
 expect view 4
 spin K1 1
 key 12 down

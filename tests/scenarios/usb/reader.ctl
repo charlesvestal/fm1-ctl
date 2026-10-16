@@ -2,7 +2,7 @@
 wait 200
 listen
 wait 100
-tap EDIT
+tap GLO
 wait 300
 said Setup page
 where

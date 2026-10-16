@@ -121,7 +121,7 @@ said Track 1 unmuted
 where
 said Steps on: 3, 7, 11
 # Setup, and its Touch page: the velocity and aftertouch settings, a key's velocity (never the pressure)
-tap EDIT
+tap GLO
 wait 300
 said Setup page: Tempo 120, Clock internal and sent out, Seq ch 10, Glow Low
 turn SELECT 1
