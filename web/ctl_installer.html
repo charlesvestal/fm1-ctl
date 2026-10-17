@@ -31,6 +31,8 @@
   pre { color: var(--dim); font-size: 12px; white-space: pre-wrap; margin-top: 16px; }
   h2 { font-size: 16px; font-weight: 700; margin: 40px 0 12px; padding-top: 8px; border-top: 2px solid var(--fg); }
   ol { margin: 0 0 16px; padding-left: 20px; }
+  textarea { width: 100%; box-sizing: border-box; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--fg);
+             background: transparent; border: 1px solid var(--dim); border-radius: 6px; padding: 8px; }
   input[type=file] { font: inherit; font-size: 13px; color: var(--dim); max-width: 100%; }
   .site { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1.2rem; margin: 0 0 1.6rem; padding-bottom: .5rem; border-bottom: 2px solid var(--fg); }
   .site .home { font-size: 1.1rem; font-weight: 700; letter-spacing: .04em; color: var(--fg); text-decoration: none; }
@@ -69,6 +71,13 @@
     <li data-t="stock3"></li>
   </ol>
   <p><button id="stockgo" type="button" disabled data-t="stockinstall"></button></p>
+  <h2 data-t="reporth">Report a problem</h2>
+  <p class="small" data-t="reportwhy"></p>
+  <p><button type="button" id="reportgo" data-t="reportread">Read the crash report</button>
+    <button type="button" id="reportcopy" hidden data-t="reportcopy">Copy</button></p>
+  <p id="reportstatus" role="status"></p>
+  <label class="sr" for="report" data-t="reportlabel">Crash report</label>
+  <textarea id="report" readonly hidden rows="14"></textarea>
   <p><a href="../" style="color:inherit" data-t="manual"></a></p>
   <p class="small">CTL-1 is built on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments<span class="sr" data-t="newtab"></span></a>,
     by way of fm1-base and felucca-bsp. Its General MIDI sounds are Sonivox EAS (Apache-2.0); Bluetooth runs on JieLi's libraries (Apache-2.0).<br>
@@ -115,6 +124,11 @@ const TEXT = {
     badpkg: "インストールするファイルが壊れています。ページを再読み込みしてください。",
     leave: "書き込み中です。ページを閉じないでください。",
     license: "MPL-2.0、無保証。ソース:",
+    reporth: "不具合を報告する",
+    reportwhy: "FM-1 がクラッシュしたら、電源を切らずに USB で接続し、下のボタンを押してください。クラッシュの記録は再起動では残りますが、電源を切ると消えます。表示された内容をコピーして、何をしていたかと一緒に送ってください。",
+    reportread: "クラッシュの記録を読む", reportcopy: "コピー", reportlabel: "クラッシュの記録",
+    reportwait: "読み込み中…", reportnone: "応答がありません。FM-1 が CTL-1 を実行しているか確かめてください。",
+    reportok: "読み込みました。コピーして送ってください。", reportcopied: "コピーしました。",
   },
   en: {
     intro: "Connect the FM-1 by USB. (Works in Chrome or Edge.)",
@@ -152,6 +166,11 @@ const TEXT = {
     badpkg: "The file to install is damaged. Reload the page.",
     leave: "Writing. Do not close the page.",
     license: "MPL-2.0, no warranty. Source:",
+    reporth: "Report a problem",
+    reportwhy: "If the FM-1 crashed, don't switch it off: connect it by USB and press the button below. The crash record survives a restart, but not switching off. Copy what appears and send it, with what you were doing at the time.",
+    reportread: "Read the crash report", reportcopy: "Copy", reportlabel: "Crash report",
+    reportwait: "Reading…", reportnone: "No answer. Check that the FM-1 is running CTL-1.",
+    reportok: "Read. Copy it and send it.", reportcopied: "Copied.",
   },
 };
 let lang = "en";                                 /* English first; 日本語 is a click away */
@@ -208,8 +227,7 @@ window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault
 })();
 
 /* stock firmware: M-VAVE's FM-1 V15, chosen by the user (M-VAVE's server allows no cross-site
-   download) and checked against its SHA-256 before anything is written */
-const STOCK_SHA256 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a";
+   download) and checked against its SHA-256 (STOCK_SHA256, fm1ota.js, inlined above) before anything is written */
 let stock = null;
 $("stockfile").addEventListener("change", async (e) => {
   stock = null;
@@ -267,6 +285,46 @@ async function run(img, product, isStock) {
 
 $("go").addEventListener("click", () => run(image, meta.product, false));
 $("stockgo").addEventListener("click", () => { if (stock) run(stock.image, stock.product, true); });
+/* the crash report: the firmware's log readout (device/main_fm1.c log_frame: F0 7D 4C 47 F7 asks, a frame a line,
+   "end" last), the same as tools/fm1_remote.py log */
+const LG = [0x7D, 0x4C, 0x47];
+$("reportgo").addEventListener("click", async () => {
+  const st = (k) => { $("reportstatus").textContent = t(k); };
+  let midi;
+  try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { $("reportstatus").textContent = t(navigator.requestMIDIAccess ? "denied" : "nomidi"); return; }
+  if (writing) return;
+  $("reportgo").disabled = true;
+  st("reportwait");
+  const lines = [];
+  try {
+    const dev = await new Updater(midi).find((id) => !IS_OTA(id));
+    if (dev) {
+      lines.push(`${dev.id.text} (${dev.name}), ${new Date().toISOString()}`);
+      dev.link.drain();
+      dev.link.send([0xF0, ...LG, 0xF7]);
+      const end = Date.now() + 4000;
+      while (Date.now() < end) {
+        const p = await dev.link.read(end - Date.now());
+        if (!p) break;
+        if (p.length < 5 || p[1] !== LG[0] || p[2] !== LG[1] || p[3] !== LG[2]) continue;
+        const txt = String.fromCharCode(...p.slice(4, -1));
+        if (txt === "end") break;
+        lines.push(txt);
+      }
+      dev.link.close();
+    }
+  } catch (e) { lines.push(String(e && e.message || e)); }
+  $("reportgo").disabled = false;
+  if (lines.length < 2) { st("reportnone"); return; }
+  $("report").value = lines.join("\n");
+  $("report").hidden = $("reportcopy").hidden = false;
+  st("reportok");
+});
+$("reportcopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("report").value); $("reportstatus").textContent = t("reportcopied"); }
+  catch (_) { $("report").select(); }
+});
 </script>
 </body>
 </html>
