@@ -10,7 +10,8 @@ is passed along, and the FM-1 plays it all on its own General MIDI sounds too, s
 - **Try it in your browser** (no FM-1 needed): <https://charlesvestal.github.io/fm1-ctl/emu/>
 - **Install it** (Chrome or Edge, with the FM-1 plugged in): <https://charlesvestal.github.io/fm1-ctl/install/>
 - **Read the manual**: <https://charlesvestal.github.io/fm1-ctl/manual/> (source: [docs/MANUAL.md](docs/MANUAL.md))
-- **Download the firmware file**: [releases](https://github.com/charlesvestal/fm1-ctl/releases)
+- **Download the firmware file**: [releases](https://github.com/charlesvestal/fm1-ctl/releases): `ctl-X.Y.fwsc` has
+  USB, TRS and Bluetooth MIDI, `ctl-usb-X.Y.fwsc` the same without Bluetooth
 
 Installing it is at your own risk, though it's hard to get stuck: the web installer can put
 M-VAVE's own firmware back, and an FM-1 that fails to start twice comes up in a safe mode the
