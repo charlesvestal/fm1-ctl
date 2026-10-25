@@ -1,0 +1,113 @@
+# smk37-port.yaml: every decision for CTL-1 on the M-Vave SMK-37, in one place.
+# Filled from the owner's answers (fm1-to-smk37 AGENTS.md, step 0). Change this file first, then the code.
+
+firmware:
+  name: CTL-1                   # unchanged on the SMK-37: same name, logo and boot
+  upstream: https://github.com/charlesvestal/fm1-ctl
+  base: CTL-1 e181b4a (fm1-base b16c177, felucca-bsp b4bb32e)
+  family: x0x                   # an app on fm1-base (X0X / FoMni / Polly line), no shared history with Felucca
+  board_layer: by_hand          # from the X0X / FoMni / Polly SMK ports, adapted to fm1-base (base/ submodule)
+  lost_on_smk:
+    - TRS MIDI IN (and its thru to USB / Bluetooth): PH8 is a matrix row on the SMK
+    - aftertouch from the keybed (the SMK's keys give velocity only); the pads' pressure can carry it
+    - Bluetooth, for now: USB-only packages first, Bluetooth once its storage is checked against the protected
+      BTIF range (0xC0000-0xC1FFF)
+  priorities:                   # owner: all of CTL-1, plus new jobs for the faders and pads
+    - playing the keys as a controller (velocity, scales, chords on the black keys)
+    - KNOB 1-4 controller banks
+    - the four-track Euclidean sequencer
+    - the arpeggiator
+    - new jobs for the pads (sequencer steps) and the faders (their own controllers)
+
+delivery:
+  mode: upstream                # a PR to charlesvestal/fm1-ctl, hosted in the owner's fork until merged
+  pr: ""
+  fork: sk8past/fm1-ctl          # branch smk37, until merged
+  package: ctl-usb-smk37.fwsc   # -elite, -mke (USB-only, see lost_on_smk)
+  usb_name: CTL-1 SMK-37        # the FM-1 build's is "CTL-1 FM-1"; "smk" is in every installer filter
+  data_family: CTL1
+  copyright: Peter Whitney
+
+models: [pro, elite, mke]       # pro also for Starrykey 37 Play
+
+keys:
+  middle: fm1                   # keys 5..31 (F3..G5) = the FM-1's 27 keys
+  outer: extend                 # C3-E3 below, G#5-C6 above, through the same key path (scales, chords, arp)
+  velocity: factory             # the unit's calibration curves; KEY VELOCITY (DYNAMIC, SOFT, HARD, FIXED 64/100/127)
+                                # on the Setup page's Touch settings, applied to keys and pads in one place
+  sequencer_page:               # owner: on the Sequencer page only; every other page, all 37 keys play
+    white: play                 # all 22 white keys play notes (the pads edit the steps)
+    black_1_4: select track 1-4 # C#3 D#3 F#3 G#3
+    black_5_11: play            # A#3 C#4 D#4 F#4 G#4 A#4 C#5 (with a scale: its chords, as on other pages)
+    black_12_15: mute track 1-4 # D#5 F#5 G#5 A#5
+
+pads:
+  pattern: steps                # the selected track's 16 steps, on every page
+  order: reading                # pads 1-8 top row (hardware 0..7), 9-16 bottom (8..15)
+  tap: toggle the step          # as the FM-1's white keys did on the Sequencer page (pat ^= 1 << step)
+  beyond_length: dark           # steps past the track's length
+  colours: screen               # the selected track's colour from the Sequencer page
+  idle: dark
+  playhead: bright
+  velocity: false               # a pad edits, it does not play
+  notes: "track select: SELECT, < > and black keys 1-4 on the Sequencer page; mutes: black keys 12-15 there"
+
+faders:
+  pattern: macros               # four controllers of their own, separate from the knobs' banks
+  takeover: soft                # a fader sends only once it moves
+  fixed: [CC 16, CC 17, CC 18, CC 19]   # default numbers (general purpose 1-4, owner OK), settable (see FADER BANK)
+  channel: the MIDI channel (ALGORITHM)
+  screen: bar                   # a short overlay: "FADER 2  CC 17  64"
+
+wheels:
+  pitch:
+    target: bend
+    range_semitones: 2          # the GM default; the receiving synth sets its own range
+    applies_to: the MIDI channel (ALGORITHM)
+  mod:
+    target: vibrato
+    detail: CC 1 on the MIDI channel
+  calibration: auto
+
+rules:
+  no_doubles: true
+  doubles_allowed:
+    - mod wheel and LFO button both send CC 1 (owner)
+    - KNOB BANK and FX held both let KNOB 1-4 set the bank's controller numbers (owner)
+    - track select on SELECT / < > and on black keys 1-4 (Sequencer page), as on the FM-1 (owner)
+
+knobs:
+  layout: fm1
+  K1: master                    # volume (virtual MASTER pot)
+  K2: select
+  K3: algorithm                 # MIDI channel
+  K4: presets                   # program change
+  K5: KNOB 1
+  K6: KNOB 2
+  K7: KNOB 3
+  K8: KNOB 4                    # on-screen "K1".."K4" / "KNOB 1-4" labels read K5..K8 on the SMK
+  step: detent
+
+buttons:
+  map: printed
+  names: firmware               # HOME SEL ARP SEQ EDIT GLO, FX ENV LFO, PLAY REC SAVE, OCT- OCT+
+  extra:
+    KNOB BANK: "held: KNOB 1-4 set the knob bank's controller numbers (as FX held)"
+    FADER BANK: "held: the four faders' controller numbers, set with KNOB 1-4"
+    "<": SELECT -1 (Play: banks; Sequencer: tracks)
+    ">": SELECT +1
+
+screen:
+  style: keep
+  colours: CTL-1's own
+  rules:
+    - group screens by meaning; the knob block at the bottom of the screen
+    - the screen shows what you touch first (value next to the thing, a short hint line)
+    - same colours and same places on screen and panel
+    - no hidden modes; play first, few menus
+
+pedal: none
+
+modes: {}                       # one UI (six pages)
+
+open_questions: []

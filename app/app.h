@@ -11,10 +11,17 @@
 #define APP_TAGLINE "A MIDI controller for the FM-1"
 #define APP_BLOCK 256u                   /* the GM synth's block: 5.8 ms at 44.1 kHz */
 
-/* the store: the settings at 0xFC000 (Felucca's FL_GLOB), the panel calibration at 0xDC000, the Bluetooth stack's
- * syscfg (its address) at 0xDE000 */
+/* the store: the settings, the panel calibration, the Bluetooth stack's syscfg.
+ * FM-1: FL_GLOB (0xFC000), data store (0xDC000, 0xDE000).
+ * SMK-37: all three slots inside the store window (0x9D000-0xBAFFF);
+ *         the FM-1 addresses 0xFC000 and 0xDC/0xDE000 are outside the
+ *         SMK's app-owned flash — 0xFC000 falls in the protected USR area. */
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_BLE, OBJ_NOBJ };
+#if BOARD_SMK37
+#define APP_STORE_MAP {0x9D000u, 0x9F000u, 0xA1000u}
+#else
 #define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u}
+#endif
 
 /* MIDI routing beside plat.h's ports: Ctl sends through ctl_send (app.c), which also plays the onboard synth */
 #define TO_SYNTH (1u << 4)               /* the onboard GM synth (when Sound is on) */

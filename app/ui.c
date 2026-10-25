@@ -68,6 +68,16 @@ static const uint8_t BLACK_K[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
 #define K_KEYW RGB(255, 253, 248)
 #define K_KEYB RGB(30, 43, 90)
 
+/* SMK-37 platform helpers (plat_smk37.c; unity build ensures they are present when BOARD_SMK37=1) */
+#if BOARD_SMK37
+void     smk_faders_tick(void);
+void     smk_wheels_tick(void);
+void     smk_fader_cc_set(int idx, uint8_t cc);
+uint8_t  smk_fader_cc_get(int idx);
+void     smk_rgb_set_step(uint32_t step, uint8_t r, uint8_t g, uint8_t b);
+void     smk_rgb_flush(void);
+#endif
+
 enum { KM_NONE, KM_NOTES, KM_ARP };    /* what a held key did: sent notes, gave them to the arpeggiator */
 static struct {
     uint8_t view;
@@ -584,7 +594,11 @@ static void knob_name(int k, char *b)
     if (k <= K_VAL3)
         put_u(put_s(b, "CC "), proj.cc[proj.bank][k - K_VAL0]);
     else if (k <= K_CC3)
+#if BOARD_SMK37
+        put_u(put_s(b, "K"), (uint32_t)(k - K_CC0 + 5));  /* K5..K8 on SMK (K1-K4 are MASTER/SELECT/ALGO/PRESET) */
+#else
         put_u(put_s(b, "Knob "), (uint32_t)(k - K_CC0 + 1));
+#endif
     else if (k < K_NONE)
         put_s(b, N[k - K_ROOT]);
     else
@@ -858,6 +872,27 @@ static void button_up(int b)
 /* the Sequencer page: the keys edit */
 static void seq_key(int k)
 {
+#if BOARD_SMK37
+    /* SMK-37 sequencer page: pads edit steps; keys play notes.
+     * White 0..21 (all 22 white keys across 37): play note.
+     * Black 0..3 (first 4 black keys): select track 1-4.
+     * Black 4..10 (next 7 black keys): play note.
+     * Black 11..14 (last 4 black keys): mute track 1-4. */
+    int w = key_white(k), b = key_black(k);
+    if (w >= 0) {
+        key_down(k, edge_vel(k));      /* play note */
+    } else if (b >= 0 && b < 4) {
+        ui.track = (uint8_t)b;
+        ui.touched = -1;
+    } else if (b >= 4 && b <= 10) {
+        key_down(k, edge_vel(k));      /* play note */
+    } else if (b >= 11 && b <= 14) {
+        int t = b - 11;
+        proj.trk[t].mute = (uint8_t)!proj.trk[t].mute;
+        mark_dirty();
+        sp_event(SE_MUTE, t, proj.trk[t].mute);
+    }
+#else
     int w = key_white(k), b = key_black(k);
     if (w >= 0) {
         if (w < trk()->steps) {
@@ -875,6 +910,7 @@ static void seq_key(int k)
         mark_dirty();
         sp_event(SE_MUTE, b - 4, proj.trk[b - 4].mute);
     }
+#endif
 }
 
 /* the MASTER pot as a controller: smoothed, sent when it moves by more than its noise */
@@ -914,6 +950,48 @@ static void input(void)
             }
         }
     touch_events();
+#if BOARD_SMK37
+    /* Outer keys: hardware note ids 0..4 (C3-E3, 5 below F3=key0) and 32..36 (G#5-C6, 6 above G5=key26).
+     * fm1_in.notes bits for outer keys sit outside the NKEYS window masked by plat_keys().
+     * We read fm1_in.notes directly and handle edges for outer keys, sending note-on/off directly. */
+    {
+        /* State for outer key note-off tracking (same role as ui.kn / ui.knotes for inner keys) */
+        static uint8_t outer_kn[10];
+        static uint8_t outer_notes[10][3];
+        static uint32_t outer_held;    /* bitmask over 10 outer key slots */
+        /* Slot mapping: slots 0..4 → hw ids 4..0 (E3→C3, descending), slots 5..9 → hw ids 32..36 (G#5→C6) */
+        static const int8_t OUTER_HW[10] = {4, 3, 2, 1, 0, 32, 33, 34, 35, 36};
+        /* Key index offsets from key 0 (F3): slots 0..4 = -1..-5; slots 5..9 = +27..+31 */
+        static const int8_t OUTER_K[10]  = {-1, -2, -3, -4, -5, 27, 28, 29, 30, 31};
+        uint32_t now_outer = 0;
+        for (i = 0; i < 10u; i++) {
+            if (fm1_in.notes & (1u << OUTER_HW[i]))
+                now_outer |= 1u << i;
+        }
+        {
+            uint32_t och = now_outer ^ outer_held;
+            outer_held = now_outer;
+            for (i = 0; i < 10u; i++) {
+                if (!(och >> i & 1u)) continue;
+                if (now_outer >> i & 1u) {
+                    /* key down: compute notes from key index */
+                    int k = OUTER_K[i];
+                    uint8_t *q = outer_notes[i];
+                    int n = key_notes(k, q), j;
+                    outer_kn[i] = (uint8_t)n;
+                    for (j = 0; j < n; j++)
+                        play(0x90u, q[j], proj.vel);  /* outer keys: use fixed velocity (Touch not available) */
+                } else {
+                    /* key up */
+                    int j;
+                    for (j = 0; j < outer_kn[i]; j++)
+                        play(0x80u, outer_notes[i][j], 0);
+                    outer_kn[i] = 0;
+                }
+            }
+        }
+    }
+#endif
     ch = btn ^ ui.btn;
     ui.btn = btn;
     for (i = 0; i < NB; i++)
@@ -923,6 +1001,46 @@ static void input(void)
             else
                 button_up((int)i);
         }
+#if BOARD_SMK37
+    /* Extra SMK buttons: B_PREV (<) steps SELECT -1, B_NEXT (>) steps SELECT +1.
+     * FADER BANK held + KNOB 1-4 turn (K5-K8 = EN_K1..EN_K4) sets the fader CC numbers. */
+    {
+        uint32_t ebtn = btn >> NB;    /* extra buttons above NB: B_KNOB_BANK-NB=0, B_FADER_BANK-NB=1, B_PREV-NB=2, B_NEXT-NB=3 */
+        uint32_t ech  = ch >> NB;
+        /* < and > : edge-triggered (on press only) */
+        if (ech & (1u << (B_PREV - NB))) {
+            if (btn & (1u << B_PREV)) {    /* press */
+                int d = -1;
+                if (ui.view == V_PLAY && proj.bank + d >= 0)          bank_to(proj.bank + d);
+                else if (ui.view == V_SEQ && ui.track + d >= 0)       { ui.track = (uint8_t)(ui.track + d); ui.touched = -1; }
+                else if (ui.view == V_SETUP && ui.setup_pg + d >= 0)  { ui.setup_pg = (uint8_t)(ui.setup_pg + d); ui.touched = -1; }
+            }
+        }
+        if (ech & (1u << (B_NEXT - NB))) {
+            if (btn & (1u << B_NEXT)) {    /* press */
+                int d = 1;
+                if (ui.view == V_PLAY && proj.bank + d < NBANKS)          bank_to(proj.bank + d);
+                else if (ui.view == V_SEQ && ui.track + d < NTRACKS)      { ui.track = (uint8_t)(ui.track + d); ui.touched = -1; }
+                else if (ui.view == V_SETUP && ui.setup_pg + d < SETUP_PAGES) { ui.setup_pg = (uint8_t)(ui.setup_pg + d); ui.touched = -1; }
+            }
+        }
+        /* FADER BANK held + K5-K8 (EN_K1..EN_K4) turns: adjust fader CC number */
+        if (ebtn & (1u << (B_FADER_BANK - NB))) {
+            int32_t ef;
+            for (i = 0; i < 4; i++) {
+                if ((ef = plat_enc(EN_K1 + (int)i)) != 0) {
+                    int cur = (int)smk_fader_cc_get((int)i);
+                    cur = clamp(cur + ef, 0, 127);
+                    smk_fader_cc_set((int)i, (uint8_t)cur);
+                    ui.act_t = plat_ms();
+                    /* Brief say so the screen reader can report the new CC */
+                    { char t[16]; put_u(put_s(t, "Fader CC "), (uint32_t)cur); say(t, 0); }
+                }
+            }
+        }
+        (void)ebtn; (void)ech;  /* suppress unused-variable warning when nothing triggered */
+    }
+#endif
     if (btn || keys || ch)
         ui.act_t = plat_ms();
     midi_in();
@@ -1650,7 +1768,13 @@ static void footer_text(const char **a, const char **b, const char **c)
         }
         break;
     case V_ARP: *a = "HOLD NOTES OR A CHORD"; *b = "KNOB 1: OFF, ON, LATCH"; break;
-    case V_SEQ: *a = "WHITE: STEPS"; *b = "SELECT, BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
+    case V_SEQ:
+#if BOARD_SMK37
+        *a = "PADS: STEPS"; *b = "BLACK 1-4: TRACK"; *c = "BLACK 12-15: MUTE";
+#else
+        *a = "WHITE: STEPS"; *b = "SELECT, BLACK 1-4: TRACK"; *c = "5-8: MUTE";
+#endif
+        break;
     case V_SOUND: *a = "PRESETS: THE SOUND"; *b = "MASTER: VOLUME"; break;
     default:
         if (ui.setup_pg == 2) {
@@ -1793,6 +1917,37 @@ static void leds(void)
         }
     }
     plat_lights(b, k, db, dk, proj.glow);
+#if BOARD_SMK37
+    /* Pad LEDs: 16 RGB pads show the selected track's step pattern in screen colours.
+     * Step on + playhead → K_HOT_T (248, 211, 201) — the inverted beat flash
+     * Step on             → K_HOT   (229,  72,  46) — vermilion
+     * Step off + in range → K_COOL_T (245, 228, 184) — dim mustard tick mark
+     * Step off + playhead → K_COOL  (217, 162,  27) — mustard (inverted off-beat)
+     * Beyond track length → off (0, 0, 0) */
+    {
+        const track_t *tp = trk();
+        int pos = eng_track_pos(ui.track);
+        uint32_t si;
+        for (si = 0; si < 16u; si++) {
+            int on  = (tp->pat >> si) & 1u;
+            int ph  = ((int)si == pos);         /* playhead on this step */
+            uint8_t r, g, bv;
+            if (si >= (uint32_t)tp->steps) {
+                r = 0; g = 0; bv = 0;           /* beyond track length: off */
+            } else if (ph) {
+                /* playhead: invert display (same logic as FM-1 key flip) */
+                if (on) { r = 248; g = 211; bv = 201; }  /* K_HOT_T */
+                else     { r = 217; g = 162; bv =  27; }  /* K_COOL   */
+            } else if (on) {
+                r = 229; g = 72; bv = 46;        /* K_HOT: active step */
+            } else {
+                r = 10;  g = 10; bv =  6;        /* dim warm tick, barely lit */
+            }
+            smk_rgb_set_step(si, r, g, bv);
+        }
+        smk_rgb_flush();
+    }
+#endif
 }
 
 /* AUTOSAVE: a few seconds after a change, when nothing is held or touched (a flash erase stops
@@ -2400,6 +2555,10 @@ static void dev_scan(void);
 void ui_frame(void)
 {
     input();
+#if BOARD_SMK37
+    smk_faders_tick();
+    smk_wheels_tick();
+#endif
     dev_scan();
     autosave();
     draw_header();
