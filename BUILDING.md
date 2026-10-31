@@ -93,14 +93,45 @@ Installing firmware is at your own risk. Hold OCT− and OCT+ for 5 seconds for 
 longer starts but reaches the chip's update mode (4C4A:8057 on USB), `base/bsp/tools/fm1_rescue.sh` puts stock
 firmware back from a Mac; otherwise recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
 
-## Publishing
+## Publishing a release
 
-```
-./build.sh --release X.Y                   # app/build/ctl-X.Y.fwsc, identity FM-1_6XXYYZZ
-tools/gen_screens.sh                       # the manual's screenshots, if the screens changed
-tools/publish_pages.sh X.Y                 # the site (landing page, installer, manual, emulator) on gh-pages
-gh release create vX.Y app/build/ctl-X.Y.fwsc --notes-file NOTES.md
+A release is built on GitHub from its tag, so anyone can check that the package came from this source:
+`.github/workflows/release.yml` calls the shared FM-1 builder,
+[`zvenson/fm1-build` at `v1`](https://github.com/zvenson/fm1-build/tree/v1) (as LOOM-8, MONK-1, X0X and Melodee do).
+The builder checks out the tagged commit, installs JieLi's Linux toolchain and the AC79 SDK at its fixed tag, runs
+`./build.sh --no-ble --release X.Y` and `./build.sh --release X.Y` (with fm1-base and felucca-bsp at the commits
+this one links) and `tests/run_tests.sh` (a failing test stops the release; the browser build's test needs
+Emscripten, which the builder does not have, and is skipped there), then signs build provenance for both packages
+and their apps: `ctl-X.Y.fwsc` and `ctl-X.Y-app.bin` (with Bluetooth), `ctl-usb-X.Y.fwsc` and `ctl-usb-X.Y-app.bin`
+(without). The Firmware Hub shows such packages as built from source.
+
+1. If the screens changed, `tools/gen_screens.sh` (the manual's screenshots), committed before the tag. Write the
+   notes first, as a draft: `gh release create vX.Y --draft --title "CTL-1 X.Y" --notes-file NOTES.md` (the
+   workflow keeps a draft's notes; without one it makes a draft from the commits).
+2. Push the tag: `git tag vX.Y && git push origin vX.Y`. The workflow builds, tests, attests, checks the SHA-256 sums
+   and the signatures against the builder, the tag and the commit, then publishes the draft. A tag with a suffix
+   (`v1.1-beta`) is a prerelease. A published release is never rebuilt: a new build needs a new tag. A manual run
+   on a branch (Actions, Run workflow) builds and attests a development package, in the run's `packages` artifact.
+3. The site from that package: `gh release download vX.Y --pattern '*.fwsc' --dir app/build --clobber`, then
+   `tools/publish_pages.sh X.Y`: it builds the browser emulator and the site (landing page, installer, manual,
+   emulator) with `tools/make_pages.py` from `app/build/ctl-X.Y.fwsc`, and pushes it to the `gh-pages` branch, which
+   GitHub Pages serves at <https://charlesvestal.github.io/fm1-ctl/>. The manual comes from `docs/MANUAL.md` by
+   fm1-base's `tools/manual_html.py`, its panel drawing from `tools/gen_manual_figures.py`.
+
+To check a downloaded package yourself (GitHub CLI, signed in):
+
+```sh
+tag=vX.Y repo=charlesvestal/fm1-ctl
+gh release download "$tag" --repo "$repo" --dir build/verify --pattern '*.fwsc'
+git fetch origin "refs/tags/$tag:refs/tags/$tag"
+gh attestation verify "build/verify/ctl-${tag#v}.fwsc" --repo "$repo" \
+  --signer-workflow zvenson/fm1-build/.github/workflows/build.yml \
+  --source-ref "refs/tags/$tag" --source-digest "$(git rev-parse "$tag^{commit}")"
 ```
 
-The site is https://charlesvestal.github.io/fm1-ctl/ (`tools/make_pages.py`; the manual from `docs/MANUAL.md` by
-fm1-base's `tools/manual_html.py`, its panel drawing by `tools/gen_manual_figures.py`).
+The same checks `ctl-usb-X.Y.fwsc` and the `-app.bin`s. `SHA256SUMS` comes with the downloads; a checksum alone
+proves nothing about where a package was built.
+
+A local release build (`./build.sh --release X.Y`, package `app/build/ctl-X.Y.fwsc`; with `--no-ble`,
+`app/build/ctl-usb-X.Y.fwsc`; both have the identity FM-1_6XXYYZZ, which the installer checks) is still how to try one
+on the FM-1 before tagging.
