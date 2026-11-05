@@ -6,6 +6,7 @@ usb_product = "CTL-1 FM-1"
 ble = true                     # Bluetooth MIDI; --no-ble leaves it out
 ble_central = true             # and CTL-1 connects to Bluetooth MIDI devices (Setup, Bluetooth page)
 words = "words.tsv"
+emu = ["midi"]                 # the emulator's MIDI ports (fm1-base's part, Web MIDI both ways), beside resample
 include = ["dsp", "dsp/eas"]
 device_include = ["dsp/eas/fm1inc"]   # <string.h> for Sonivox: the toolchain has no C library headers
 mmio_skip = ["dsp/eas/"]       # Sonivox: note, sample and table constants, not addresses

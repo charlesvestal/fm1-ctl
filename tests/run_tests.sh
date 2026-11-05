@@ -39,6 +39,8 @@ run host-build sh build.sh --host
 run host-build-usb sh build.sh --host --no-ble
 if command -v emcc >/dev/null 2>&1; then
     run emu sh -c "sh build.sh --web && node tests/host/emu_test.mjs $B/emu/app.wasm"
+    # fm1-base's page with CTL-1's bits, its worklet with the parts resample (in time at 48 kHz) and midi, and CTL-1's keys
+    run emu-page node tests/host/emu_page_test.mjs $B/emu
 else
     echo "  skip emu (no emcc)"
 fi

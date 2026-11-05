@@ -13,4 +13,9 @@ export AC79_SDK="${AC79_SDK:-$HOME/fw-AC79_AIoT_SDK}"
 PY="${PYTHON:-python3}"
 [ -f base/tools/build.py ] || { echo "build.sh: no fm1-base in base/ (git submodule update --init --recursive)"; exit 1; }
 "$PY" -c 'import PIL' 2>/dev/null || { echo "build.sh: $PY has no Pillow (pip3 install Pillow)"; exit 1; }
+case " $* " in
+    *" --web "*)                            # the emulator: fm1-base's page with CTL-1's bits (tools/emu_page.py)
+        "$PY" base/tools/build.py app "$@"
+        exec "$PY" tools/emu_page.py;;
+esac
 exec "$PY" base/tools/build.py app "$@"

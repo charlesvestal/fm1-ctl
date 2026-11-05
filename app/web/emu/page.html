@@ -1,0 +1,88 @@
+<!-- SPDX-License-Identifier: MPL-2.0
+     Copyright (C) 2026 Charles Vestal
+     CTL-1's bits of the emulator's page: fm1-base's page (base/web/emu/index.html) with these put in by
+     tools/emu_page.py (./build.sh --web). What runs on it is app.js and app_worklet.js beside this file; the MIDI
+     ports are fm1-base's part "midi" (fm1.toml emu). -->
+<!-- emu-page: name -->
+CTL-1
+<!-- emu-page: description -->
+CTL-1, a MIDI controller firmware for the M-VAVE FM-1, in your browser: the same code the FM-1 runs, sending to your MIDI ports.
+<!-- emu-page: head -->
+<style>
+/* CTL-1's paper and ink, as the site and its screen, in light and dark alike; the FM-1 itself stays black */
+:root, :root[data-theme="dark"] { --ground: #fbf8f1; --ink: #1e2b5a; --muted: #5d6585; --rule: #ddd4c2; --accent: #e5482e; --teal: #1e2b5a;
+        --card: #efe9dc; --bad: #c23a22; --focus: #1e2b5a; --accent-ink: #c23a22; color-scheme: light;
+        --panel-dim: #5a4238; --panel-dim-white: #e8d2c4; --panel-dim-black: #8fb8b2; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ground: #fbf8f1; --ink: #1e2b5a; --muted: #5d6585; --rule: #ddd4c2; --accent: #e5482e; --teal: #1e2b5a;
+        --card: #efe9dc; --bad: #c23a22; --focus: #1e2b5a; color-scheme: light; }
+}
+:focus-visible { outline-color: var(--ink); }
+a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+header nav a[aria-current] { text-decoration: none; color: var(--accent-ink); }
+.start button { font-weight: 700; border-radius: 8px; background: var(--accent); color: #fff; }
+.bar .num { display: inline-block; min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.bar label { display: inline-flex; gap: .4rem; align-items: center; }
+.bar [hidden] { display: none; }   /* (the MIDI part's port lists until MIDI ports is pressed: .bar .keys would show them) */
+.help p, .help ul { color: var(--muted); }
+</style>
+<!-- emu-page: header -->
+<header>
+  <h1><a href="../" style="color:inherit;text-decoration:none" title="CTL-1 home">CTL-1</a></h1>
+  <p>a MIDI controller for the FM-1, in the browser: the same code the FM-1 runs</p>
+  <nav aria-label="CTL-1"><a href="../emu/" aria-current="page">Emulator</a><a href="../install/">Install</a><a href="../manual/">Manual</a><a href="https://github.com/charlesvestal/fm1-ctl">Source</a></nav>
+</header>
+<!-- emu-page: bar -->
+  <label>Keyboard velocity <input id="kvel" type="range" min="1" max="127" value="100" oninput="kvelv.textContent = this.value"> <span class="num" id="kvelv">100</span></label>
+<!-- emu-page: end -->
+<section class="help">
+  <div>
+    <h2>Playing</h2>
+    <ul>
+      <li><b>Keys</b> play notes, F3 to G5, and the FM-1's own General MIDI sounds play them. <b>OCT−</b> / <b>OCT+</b>: an octave.</li>
+      <li><b>ENV</b> held: sustain; tap it twice to lock it. <b>LFO</b> held: the mod wheel. <b>REC</b>: all notes off.</li>
+      <li><b>ALGORITHM</b> MIDI channel, <b>PRESETS</b> program change (the sound follows), <b>MASTER</b> volume.</li>
+      <li>Velocity and aftertouch from the keys: on the <b>Setup</b> page, turn <b>SELECT</b> for Touch.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Pages</h2>
+    <ul>
+      <li>A button each: <b>HOME</b> Play, <b>SEL</b> Keys, <b>ARP</b> Arp, <b>SEQ</b> Sequencer, <b>EDIT</b> Sound, <b>GLO</b> Setup (tempo).</li>
+      <li><b>KNOB 1–4</b> set the four values at the bottom of the screen; on Play, four controllers in four banks.</li>
+      <li><b>SELECT</b> and <b>FX</b> step through the banks; hold <b>FX</b> to set their controller numbers.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Scales, arpeggiator, sequencer</h2>
+    <ul>
+      <li><b>Keys</b> page, KNOB 2: a scale. Then the white keys play its notes and the black keys its chords.</li>
+      <li><b>Arp</b> page, KNOB 1: Off, On, Latch; hold notes or a chord.</li>
+      <li><b>Sequencer</b>: four Euclidean drum tracks. The white keys toggle steps, black keys 1–4 pick a track (or SELECT), 5–8 mute. <b>PLAY</b> starts it.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>MIDI</h2>
+    <ul>
+      <li>Press <b>MIDI ports</b> and pick a <b>MIDI out</b> port to play a synth or your DAW from this page (Chrome and Edge have Web MIDI). This browser remembers the ports.</li>
+      <li>A <b>MIDI in</b> port arrives as the FM-1's USB: it plays the sounds, lights the keys, and can be the clock (Setup: Ext).</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Mouse and touch</h2>
+    <ul>
+      <li>Drag a knob up or down, or scroll over it. <kbd>Shift</kbd>-click (or right-click) a button or key to hold it; click it again to let go.</li>
+      <li>Keys: click lower for more velocity, drag down for aftertouch. A pen's own pressure works too.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Keyboard and screen reader</h2>
+    <ul>
+      <li><kbd>Tab</kbd> moves through the FM-1's knobs, buttons and keys. <kbd>Space</kbd> or <kbd>Enter</kbd> presses the one with focus, for as long as you hold it; <kbd>Shift</kbd>+<kbd>Enter</kbd> keeps it held until you press it again.</li>
+      <li>A knob turns with the arrow keys, <kbd>Page Up</kbd> / <kbd>Page Down</kbd> faster. On the keys, <kbd>←</kbd> <kbd>→</kbd> move to the next key.</li>
+      <li>While the FM-1 has focus, and <b>Keyboard shortcuts</b> is on, the letters play it like a piano: <kbd>A</kbd> is the lowest key, <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … up to <kbd>'</kbd>, at the keyboard velocity set below the FM-1.</li>
+      <li>Also: <kbd>Z</kbd> / <kbd>X</kbd> octave, <kbd>Q</kbd> sustain (ENV), <kbd>1</kbd> ARP, <kbd>2</kbd> FX, <kbd>Space</kbd> PLAY (unless you reached a button or key with <kbd>Tab</kbd>), <kbd>Backspace</kbd> REC, <kbd>Esc</kbd> HOME, <kbd>↑</kbd> <kbd>↓</kbd> SELECT.</li>
+      <li>The screen is read out as it changes, by your own screen reader or by this page's voice (eSpeak NG, GPL-3.0), in CTL-1's own words: <a href="https://charlesvestal.github.io/fm1-reader/">the FM-1 screen reader</a>, as on the FM-1 itself. Each button and key also says whether its light is on.</li>
+    </ul>
+  </div>
+</section>

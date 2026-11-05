@@ -44,7 +44,7 @@ On Linux x86-64 the toolchain runs natively and no container is needed.
 ./build.sh --no-ble           # app/build/ctl-usb.fwsc: without Bluetooth
 ./build.sh --release X.Y      # app/build/ctl-X.Y.fwsc, identity FM-1_6XXYYZZ (0.1 is FM-1_6000100)
 ./build.sh --host             # the simulator: app/build/host/ctl_host (--no-ble: ctl-usb_host)
-./build.sh --web              # the browser emulator: app/build/emu/
+./build.sh --web              # the browser emulator: app/build/emu/ (fm1-base's page and parts; CTL-1's bits: app/web/emu/)
 ```
 
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`),
@@ -72,7 +72,7 @@ sh base/tests/run_tests.sh        # fm1-base's own (the encoder and TRS parsers,
 ```
 
 CTL-1's: the GM synth; the update path against `app/build/ctl.fwsc` (fm1-base's tests); the browser build in
-Node (`tests/host/emu_test.mjs`); and the whole app in the simulator (`tests/scenarios/*.ctl`: notes, banks,
+Node (`tests/host/emu_test.mjs`; `emu_page_test.mjs`: fm1-base's page and its parts, in time at 48 kHz); and the whole app in the simulator (`tests/scenarios/*.ctl`: notes, banks,
 scales, the arpeggiator, the sequencer and clock, MIDI thru, Bluetooth, persistence; `tests/scenarios/usb/`
 without Bluetooth), with screenshots and the MIDI sent in `app/build/scenarios/`.
 
