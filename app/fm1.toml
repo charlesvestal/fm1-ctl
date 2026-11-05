@@ -21,3 +21,11 @@ tagline = "A MIDI controller for the FM-1"
 repo = "https://github.com/charlesvestal/fm1-ctl"
 licence = "MPL-2.0"
 credits = "Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments); the sounds are Sonivox EAS."
+
+# firmware.json, for firmware hubs (fm1-base docs/FIRMWARE-JSON.md)
+author = "Charles Vestal"
+description = "CTL-1 turns the M-VAVE FM-1 into a MIDI controller. The keys play notes, with velocity and aftertouch read from the keys themselves, in any scale with its chords under the black keys; the knobs send controllers in four banks; an arpeggiator and a four-track Euclidean drum sequencer run on its clock. Everything goes out over USB and Bluetooth, MIDI from the TRS jack is passed along, and the FM-1 plays it all on its own General MIDI sounds too, so it works with nothing connected."
+tags = ["controller", "midi", "sequencer", "chords", "general-midi"]
+install = "https://charlesvestal.github.io/fm1-ctl/install/"
+site = "https://charlesvestal.github.io/fm1-ctl/"
+screenshot = "docs/img/screen-cc.png"
