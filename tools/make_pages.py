@@ -38,7 +38,7 @@ LANDING = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CTL-1 · a MIDI controller for the FM-1</title>
-<meta name="description" content="A MIDI controller firmware for the M-VAVE FM-1: notes in any scale with its chords, four banks of knobs, an arpeggiator, a Euclidean drum sequencer, and General MIDI sounds of its own.">
+<meta name="description" content="CTL-1 turns the M-VAVE FM-1 into a MIDI controller, with notes in any scale and its chords, four banks of knobs, an arpeggiator, a Euclidean drum sequencer and General MIDI sounds of its own.">
 <meta name="theme-color" content="#fbf8f1">
 <style>
 /* CTL-1's paper and ink, as its screen: warm white paper, ink-blue type, vermilion for what is played,
@@ -77,34 +77,34 @@ code { font-size: .9em; }
 <main>
 <h1>CTL-1</h1>
 <p class="sub">A MIDI controller for the M-VAVE FM-1</p>
-<p class="lede">The FM-1's keys, knobs and buttons as a MIDI controller: notes in any scale with its chords under
-the black keys, four banks of knobs, an arpeggiator and a Euclidean drum sequencer, over USB and Bluetooth. And General MIDI
-sounds of its own, so it plays with nothing connected.</p>
+<p class="lede">CTL-1 turns your FM-1's keys, knobs and buttons into a MIDI controller. Play notes in any scale, with
+its chords under the black keys. Send controllers from four banks of knobs, and run an arpeggiator and a Euclidean drum
+sequencer, over USB and Bluetooth. It has General MIDI sounds of its own, so it plays with nothing connected.</p>
 <div class="shots">
   <img src="img/screen-play.png" width="240" height="240" alt="CTL-1's Play page: Note E4 100, a chord lit on the keys; bank A: CC 74 at 52, CC 71 at 70, CC 1 at 0, CC 7 at 100">
   <img src="img/screen-keys.png" width="240" height="240" alt="CTL-1's Keys page: D Dorian, notes D E F G A B C; white keys the scale, black keys its chords">
   <img src="img/screen-seq.png" width="240" height="240" alt="CTL-1's Sequencer page, playing at 120: rows of steps for Kick, Snare, Hat and Clap; track 2: 16 steps, 2 hits, rotate 4">
 </div>
 <nav class="ways" aria-label="Get CTL-1">
-  <a href="emu/"><strong>Try it in the browser</strong><span>The same code the FM-1 runs, with sound. Mouse, touch or keyboard; in Chrome or Edge it can play your MIDI ports.</span></a>
-  <a href="install/"><strong>Install <em class="v">v__VERSION__</em></strong><span>From Chrome or Edge, with the FM-1 connected by USB. Nothing to install on the computer.</span></a>
-  <a href="manual/"><strong>Manual</strong><span>Getting started in a few minutes, then everything else.</span></a>
-  <a href="firmware/__PKG__"><strong>Download <em class="v">__PKG__</em></strong><span>For the command-line installer: <code>python3 tools/fm1_install.py __PKG__</code></span></a>
-  <a href="__REPO__"><strong>Source</strong><span>GitHub, MPL-2.0. Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita, Hügelton Instruments.</span></a>
+  <a href="emu/"><strong>Try it in the browser</strong><span>Play it right here, with sound, using a mouse, touch or the keyboard. It runs the same code as the FM-1, and in Chrome or Edge it can play your MIDI ports.</span></a>
+  <a href="install/"><strong>Install <em class="v">v__VERSION__</em></strong><span>Connect your FM-1 by USB and install from Chrome or Edge. There's nothing to install on your computer.</span></a>
+  <a href="manual/"><strong>Manual</strong><span>Get started in a few minutes, then look up everything else.</span></a>
+  <a href="firmware/__PKG__"><strong>Download <em class="v">__PKG__</em></strong><span>For the command-line installer: <code>python3 base/tools/fm1_install.py __PKG__</code></span></a>
+  <a href="__REPO__"><strong>Source</strong><span>On GitHub under MPL-2.0. Built on fm1-base and felucca-bsp, which grew out of Felucca by Leo Kuroshita (Hügelton Instruments).</span></a>
 </nav>
 
 <h2>What it does</h2>
 <ul class="feat">
-  <li><b>Keys.</b> 27 keys, ±3 octaves. With a scale (nine of them, any root) the white keys play its notes and the black keys its chords. Sustain on ENV, tap it twice to lock; the mod wheel on LFO. Velocity and aftertouch from the keys themselves, with no change to the hardware.</li>
-  <li><b>Knobs.</b> Four controllers in four banks, 16 in all, each with its own number; MASTER can send one too.</li>
-  <li><b>Arpeggiator.</b> Up, down, up-down, random or as played, 1/4 to 1/32, up to three octaves, with latch.</li>
-  <li><b>Sequencer.</b> Four drum tracks of Euclidean rhythms, edited on the keys, on their own channel.</li>
-  <li><b>Clock.</b> Its own, sent as MIDI clock with start and stop, or following yours.</li>
-  <li><b>Sounds.</b> The 128 General MIDI sounds and the drum kit (Sonivox EAS), through the FM-1's speaker and headphones: PRESETS picks one.</li>
+  <li>Play the 27 <b>keys</b> across ±3 octaves. Pick a scale (nine of them, on any root), and the white keys play its notes while the black keys play its chords. Hold ENV for sustain, or tap it twice to lock it, and hold LFO for the mod wheel. The keys read velocity and aftertouch by themselves, with no change to the hardware.</li>
+  <li>Turn the <b>knobs</b> to send four controllers in each of four banks, 16 in all, each with its own number. MASTER can send one too.</li>
+  <li>Hold a chord for the <b>arpeggiator</b>. It plays up, down, up-down, at random or as played, from 1/4 to 1/32, over up to three octaves, with latch.</li>
+  <li>Build beats on the <b>sequencer</b>: four drum tracks of Euclidean rhythms on their own channel, which you can edit on the keys.</li>
+  <li>Run everything on its own <b>clock</b> and send it as MIDI clock with start and stop, or follow yours.</li>
+  <li>Play the 128 General MIDI <b>sounds</b> and the drum kit (Sonivox EAS) through the FM-1's speaker and headphones. Turn PRESETS to pick one.</li>
 </ul>
-<p>MIDI out and in over USB and Bluetooth, and the TRS jack's MIDI in passed on.</p>
-<p class="small">To go back to the official firmware, use the installer's "Back to the stock firmware", or
-M-VAVE's updater, M-UPGRADE, from <a href="https://www.m-vave.com/download">m-vave.com/download</a>.
+<p>MIDI goes out and comes in over USB and Bluetooth, and MIDI from the TRS jack is passed on.</p>
+<p class="small">To go back to the official firmware, use "Back to the stock firmware" in the installer, or
+M-VAVE's own updater, M-UPGRADE, from <a href="https://www.m-vave.com/download">m-vave.com/download</a>.
 M-VAVE and FM-1 are trademarks of their owners. CTL-1 is not affiliated with M-VAVE.</p>
 </main>
 </body>
