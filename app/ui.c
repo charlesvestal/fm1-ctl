@@ -1501,7 +1501,7 @@ static void draw_setup(void)                     /* the settings below; what the
     put_u(put_s(t, "TRS   in "), plat_midi_count(PORT_TRS, 0));
     cv_text(10, y + 16, &FONT_XS, t, K_DIM);
     cv_text(10, 72, &FONT_XS, "Settings save by themselves; SAVE: now.", K_DIM);
-    cv_text(10, 88, &FONT_XS, "OCT- and OCT+ held 5 s: update mode.", K_DIM);
+    cv_text(10, 88, &FONT_XS, "REC held at power-on: update mode.", K_DIM);
 }
 
 static void draw_sound(void)                     /* the onboard GM synth: what it plays, and its load */
@@ -2265,8 +2265,7 @@ static void speak_dump(void)
 {
     static const char *const MSG[][2] = {{"LOWEST KEY", "F#3"}, {"LOWEST KEY", "C0"}, {"SUSTAIN", "LOCKED"},
                                          {"SAVED", 0}, {"BLUETOOTH", "STARTING"}, {"BLUETOOTH OFF", "AFTER A CRASH"},
-                                         {"BLUETOOTH", "ON"}, {"BLUETOOTH", "OFF"}, {"UPDATE MODE IN", "3.."},
-                                         {"UPDATE MODE", "CANCELLED"}};
+                                         {"BLUETOOTH", "ON"}, {"BLUETOOTH", "OFF"}};
     static uint8_t keep_ui[sizeof ui];
     project_t keep = proj;
     int v, q, x, i, k;
