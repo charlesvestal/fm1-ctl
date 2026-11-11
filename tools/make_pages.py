@@ -8,7 +8,7 @@
   emu/                           CTL-1 in the browser (app/build/emu, from ./build.sh --web), with
                                  fm1-reader's words.js, tts.js and eSpeak NG for its screen reader
   words/                         the screen reader's words files (app/web/words, from app/words.tsv)
-  install/index.html             the web installer (web/ctl_installer.html, with fm1-base's fm1pkg.js and
+  install/index.html             the web installer (web/ctl_installer.html, with fm1-base's fm1ports.js, fm1pkg.js and
                                  fm1ota.js and the package's metadata inlined; Chrome or Edge, Web MIDI)
   manual/index.html, img/        the manual (fm1-base's tools/manual_html.py, from docs/MANUAL.md)
   firmware/ctl-VERSION.fwsc      the package the installer writes; also the download
@@ -128,8 +128,8 @@ def main(pkg, version, out):
     shutil.copy(pkg, out / "firmware" / name)
     # the installer
     page = (SRC / "web" / "ctl_installer.html").read_text(encoding="utf-8")
-    lib = strip_module((BASE / "web" / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
-        strip_module((BASE / "web" / "fm1ota.js").read_text(encoding="utf-8"))
+    lib = "\n".join(strip_module((BASE / "web" / f).read_text(encoding="utf-8"))   # (fm1ota.js asks fm1ports.js's)
+                    for f in ("fm1ports.js", "fm1pkg.js", "fm1ota.js"))
     meta = json.dumps({"version": version, "product": product, "pkg": "../firmware/" + name})
     for mark in ("/*LIB*/", "/*META*/"):
         if page.count(mark) != 1:
