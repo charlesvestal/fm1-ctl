@@ -6,6 +6,8 @@ Euclidean drum sequencer on its clock. Everything goes out over USB and Bluetoot
 jack is passed along. The FM-1 also plays it all on its own General MIDI sounds, so it works with nothing
 connected. If you like, the keys can sense how hard you play them, for velocity and aftertouch.
 
+CTL-1 also has an experimental [SMK-37 build](#smk-37). The rest of this manual describes the FM-1.
+
 ![A drawing of the FM-1 running CTL-1, each knob, button and key labeled with what it does. Section 3, Controls, says the same in words](img/fm1-panel.svg "The FM-1 (a drawing), running CTL-1, each control labeled")
 
 ---
@@ -29,6 +31,44 @@ connected. If you like, the keys can sense how hard you play them, for velocity 
 15. Troubleshooting
 16. Parameters
 17. Credits
+18. SMK-37
+
+---
+
+## SMK-37
+
+The experimental SMK-37 Pro, Elite and MKE-P37 builds use fm1-base's SMK board support, which has not
+yet been confirmed on hardware. Build a package for the exact model as described in
+[BUILDING.md](../BUILDING.md); the FM-1 installer and recovery instructions below are not for the SMK.
+
+The FM-1 controls in this manual map to the SMK's buttons: SCALE is SEL, CHORD is ENV, NOTE REPEAT is
+LFO, PARA is EDIT, GLOBE is GLO, PATCH is HOME, BT is SAVE, and SEQ PLAY / SEQ REC are PLAY / REC.
+On the Play page (PATCH), K1–K8 send CCs in four banks; KBANK or FX advances the bank.
+Hold FX and turn any knob to change its CC number. The screen shows K1–K4 or K5–K8 as you turn them.
+K5–K8 default to CC 24–27 in bank A, 28–31 in B, 32–35 in C and 36–39 in D.
+On other pages, K1–K4 edit the page's settings and K5–K8 do nothing.
+
+LEFT and RIGHT choose the sound on Play, or navigate tracks on the Sequencer and pages on Setup.
+Hold GLOBE and press one of the first 16 physical keys (counting black keys) to choose MIDI channel 1–16;
+those presses don't play notes. Tap GLOBE without a key to open Setup.
+
+- All 37 keys play: C3–C6 in chromatic mode. In a scale, the white keys below F3 continue down from
+  the FM-1's first scale step and the higher keys continue up; black keys play the corresponding chords.
+  The screen shows the middle 27 keys. On the Sequencer page those middle keys edit steps and tracks;
+  the outer keys do not play.
+- Key velocity comes from the SMK's keyboard, or is fixed using Setup's Touch page. The SMK keys do not
+  provide aftertouch; the FM-1's curve and aftertouch settings are unavailable.
+- Pads 1–16 send notes 36–51 on the sequencer channel, with pad velocity and polyphonic pressure.
+  They work on every page; REC releases them. Their LEDs light when pressed.
+- Faders 1–4 send CCs on the current MIDI channel. FBANK cycles their independent, non-persistent
+  banks A–D, using the default CC numbers in the [knob bank table](#6-knobs-and-banks). Moving a fader
+  does not alter its bank when the knob bank changes. Fader 4 in bank A sends CC 7, controlling volume;
+  K5 no longer controls the virtual MASTER.
+- The pitch and modulation wheels send pitch bend and CC 1; NOTE REPEAT raises modulation while held,
+  returning to the wheel's position when released. The sustain pedal sends CC 64 and works
+  alongside CHORD/ENV's momentary and locked sustain. Connect the pedal before powering on.
+- The TRS jack is MIDI **out**, not in. It carries channel and realtime MIDI from the USB output stream
+  and from USB input (not SysEx); USB and Bluetooth MIDI remain available.
 
 ---
 

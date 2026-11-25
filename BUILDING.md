@@ -45,7 +45,15 @@ On Linux x86-64 the toolchain runs natively and no container is needed.
 ./build.sh --release X.Y      # app/build/ctl-X.Y.fwsc, identity FM-1_6XXYYZZ (0.1 is FM-1_6000100)
 ./build.sh --host             # the simulator: app/build/host/ctl_host (--no-ble: ctl-usb_host)
 ./build.sh --web              # the browser emulator: app/build/emu/ (fm1-base's page and parts; CTL-1's bits: app/web/emu/)
+FM1B_BOARD=smk37 FM1B_MODEL=pro ./build.sh  # app/build/ctl-smk37.fwsc
 ```
+
+For the SMK-37 Elite use `FM1B_MODEL=elite` (`ctl-smk37-elite.fwsc`), for the MKE-P37 use
+`FM1B_MODEL=mke` (`ctl-smk37-mke.fwsc`). The model must match the device; these packages have different
+identities and flash layouts from the FM-1. `--no-ble` and `--host` also work with these variables.
+The SMK board layer has not yet been confirmed on hardware. The existing release workflow and web installer
+publish the FM-1 packages only; do not use them to install an SMK build. See
+[fm1-base](https://github.com/charlesvestal/fm1-base) for its SMK update and recovery instructions.
 
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`),
 `PYTHON` the Python that runs the build.
@@ -75,6 +83,7 @@ CTL-1's: the GM synth; the update path against `app/build/ctl.fwsc` (fm1-base's 
 Node (`tests/host/emu_test.mjs`; `emu_page_test.mjs`: fm1-base's page and its parts, in time at 48 kHz); and the whole app in the simulator (`tests/scenarios/*.ctl`: notes, banks,
 scales, the arpeggiator, the sequencer and clock, MIDI thru, Bluetooth, persistence; `tests/scenarios/usb/`
 without Bluetooth), with screenshots and the MIDI sent in `app/build/scenarios/`.
+The SMK-37 scenario runs against its own Pro host build and checks the additional controls and persistence.
 
 `app/build/host/ctl_host SCRIPT OUTDIR` runs one script. The commands are listed at the top of
 `base/host/plat_host.c`, and CTL-1's own checks and commands at the top of `app/host.c`. The simulator's

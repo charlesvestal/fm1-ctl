@@ -7,6 +7,19 @@ project_t proj;
 /* the knob banks: A filter cutoff, resonance, modulation, volume; B attack, release, decay, vibrato;
  * C and D the general-purpose controllers 16-23 */
 static const uint8_t CC_DEFAULT[NBANKS][NKNOBS] = {{74, 71, 1, 7}, {73, 72, 75, 76}, {16, 17, 18, 19}, {20, 21, 22, 23}};
+#if PLAT_SMK37
+#define SMK_CC_MAGIC 0x38434353u
+static void smk_cc_defaults(void)
+{
+    int b, k;
+    proj.smk.magic = SMK_CC_MAGIC;
+    for (b = 0; b < NBANKS; b++)
+        for (k = 0; k < 4; k++) {
+            proj.smk.cc[b][k] = (uint8_t)(24 + b * 4 + k);
+            proj.smk.val[b][k] = 64;
+        }
+}
+#endif
 /* the sequencer: General MIDI drums (kick, snare, closed hat, clap) */
 static const uint8_t TRK_DEFAULT[NTRACKS][4] = {{16, 4, 0, 36}, {16, 2, 4, 38}, {16, 8, 0, 42}, {12, 3, 2, 39}};
 
@@ -31,6 +44,9 @@ void project_defaults(void)
     memset(&proj, 0, sizeof proj);
     proj.magic = PROJ_MAGIC;
     proj.format = PROJ_FORMAT;
+#if PLAT_SMK37
+    smk_cc_defaults();
+#endif
     proj.vel = 100;
     for (b = 0; b < NBANKS; b++)
         for (k = 0; k < NKNOBS; k++) {
@@ -44,7 +60,7 @@ void project_defaults(void)
     proj.seq_ch = 9;                             /* channel 10 */
     proj.glow = 1;
     proj.touch = 1;                              /* velocity from the keys */
-    proj.at_mode = AT_POLY;                      /* and aftertouch, per note */
+    proj.at_mode = PLAT_SMK37 ? AT_OFF : AT_POLY; /* the SMK keys have velocity, not pressure */
     for (k = 0; k < NTRACKS; k++) {
         track_t *t = &proj.trk[k];
         t->steps = TRK_DEFAULT[k][0];
@@ -72,6 +88,14 @@ static int project_valid(void)
         for (k = 0; k < NKNOBS; k++)
             if (proj.cc[b][k] > 119u || proj.val[b][k] > 127u)
                 return 0;
+#if PLAT_SMK37
+    if (proj.smk.magic != SMK_CC_MAGIC)
+        return 0;
+    for (b = 0; b < NBANKS; b++)
+        for (k = 0; k < 4; k++)
+            if (proj.smk.cc[b][k] > 119u || proj.smk.val[b][k] > 127u)
+                return 0;
+#endif
     for (k = 0; k < NTRACKS; k++) {
         const track_t *t = &proj.trk[k];
         if (t->steps < 1u || t->steps > 16u || t->hits > t->steps || t->rot >= t->steps || t->note > 127u ||
@@ -86,6 +110,10 @@ int project_load(void)
     int n;
     memset(&proj, 0, sizeof proj);
     n = plat_store_load(OBJ_PROJ, &proj, sizeof proj);
+#if PLAT_SMK37
+    if (n > 0 && n <= (int)(sizeof proj - sizeof proj.smk))
+        smk_cc_defaults();
+#endif
     if (n >= 8 && project_valid()) {
         if (proj.sound == SOUND_KEYS) {          /* an older project's "Keys": on, MIDI in not played */
             proj.sound = SOUND_IN;

@@ -28,6 +28,15 @@ static int out_count(int what)           /* since the script's last "out": 0 clo
 int app_expect(const char *what, int *got)
 {
     int g, k;
+#if PLAT_SMK37
+    if (!strcmp(what, "trs_status"))
+        g = (int)(smk_host_trs_pkt >> 8 & 0xFFu);
+    else if (!strcmp(what, "trs_data1"))
+        g = (int)(smk_host_trs_pkt >> 16 & 0xFFu);
+    else if (!strcmp(what, "trs_data2"))
+        g = (int)(smk_host_trs_pkt >> 24);
+    else
+#endif
     if (!strcmp(what, "voices"))         /* the onboard synth's voices sounding */
         g = gm_voices;
     else if (!strcmp(what, "sound"))
@@ -90,15 +99,40 @@ int app_expect(const char *what, int *got)
         g = proj.cc[proj.bank][atoi(what + 2) & 3];
     else if (!strncmp(what, "val", 3))   /* valN: knob N's value */
         g = proj.val[proj.bank][atoi(what + 3) & 3];
+#if PLAT_SMK37
+    else if (!strncmp(what, "smk_cc", 6))
+        g = proj.smk.cc[proj.bank][atoi(what + 6) & 3];
+    else if (!strncmp(what, "smk_val", 7))
+        g = proj.smk.val[proj.bank][atoi(what + 7) & 3];
+#endif
     else
         return 0;
     *got = g;
     return 1;
 }
 
+#if PLAT_SMK37
+static void run_ms(uint32_t ms);
+#endif
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
 {
     (void)a, (void)b, (void)c, (void)d;
+#if PLAT_SMK37
+    if (!strcmp(cmd, "spin") && a[0] == 'K' && a[1] >= '5' && a[1] <= '8' && !a[2]) {
+        static const int roles[4] = {EN_K5, EN_SELECT, EN_ALGO, EN_PRESET};
+        int k = a[1] - '5';
+        enc_acc[roles[k]] += atoi(b);
+        plat_host_exact = 1;
+        run_ms(1);
+        plat_host_exact = 0;
+        return 1;
+    }
+    if (!strcmp(cmd, "legacy_project")) {
+        if (plat_store_save(OBJ_PROJ, &proj, sizeof proj - sizeof proj.smk) != 0)
+            return 0;
+        return 1;
+    }
+#endif
     if (!strcmp(cmd, "fixed")) {         /* the keys at the fixed velocity, no aftertouch */
         proj.touch = 0;
         proj.at_mode = AT_OFF;
