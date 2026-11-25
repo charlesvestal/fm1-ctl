@@ -118,15 +118,6 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
 {
     (void)a, (void)b, (void)c, (void)d;
 #if PLAT_SMK37
-    if (!strcmp(cmd, "spin") && a[0] == 'K' && a[1] >= '5' && a[1] <= '8' && !a[2]) {
-        static const int roles[4] = {EN_K5, EN_SELECT, EN_ALGO, EN_PRESET};
-        int k = a[1] - '5';
-        enc_acc[roles[k]] += atoi(b);
-        plat_host_exact = 1;
-        run_ms(1);
-        plat_host_exact = 0;
-        return 1;
-    }
     if (!strcmp(cmd, "legacy_project")) {
         if (plat_store_save(OBJ_PROJ, &proj, sizeof proj - sizeof proj.smk) != 0)
             return 0;

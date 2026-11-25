@@ -4,16 +4,15 @@
  * contract with fm1-base (device/unity.c, host/plat_host.c). */
 #pragma once
 #include <stdint.h>
+#if defined(PLAT_SMK37) && PLAT_SMK37
+#define APP_SMK_8ENC                    /* CTL uses all eight SMK encoders as calibrated roles */
+#endif
 #include "plat.h"
 #include "gm.h"
 
 #define APP_NAME "CTL-1"
 #define APP_TAGLINE "A MIDI controller for the FM-1"
 #define APP_BLOCK 256u                   /* the GM synth's block: 5.8 ms at 44.1 kHz */
-#if PLAT_SMK37
-#define APP_SMK_K5                       /* K5 is a controller, not the virtual MASTER */
-#endif
-
 /* the store: the settings at 0xFC000 (Felucca's FL_GLOB), the panel calibration at 0xDC000, the Bluetooth stack's
  * syscfg (its address) at 0xDE000 */
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_BLE, OBJ_NOBJ };

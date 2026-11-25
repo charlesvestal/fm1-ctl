@@ -56,7 +56,7 @@ CTL-1 is an app on [fm1-base](https://github.com/charlesvestal/fm1-base) (`base/
 sh tests/run_tests.sh                                  # the app in the simulator, the emulator, the update path
 ./build.sh                                             # app/build/ctl.fwsc
 ./build.sh --no-ble                                    # app/build/ctl-usb.fwsc: without Bluetooth
-FM1B_BOARD=smk37 FM1B_MODEL=pro ./build.sh            # app/build/ctl-smk37.fwsc
+./build.sh --board smk37 --model pro                 # app/build/ctl-smk37.fwsc
 python3 base/tools/fm1_install.py app/build/ctl.fwsc   # install it over USB
 ```
 

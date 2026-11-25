@@ -75,7 +75,7 @@ static struct {
     uint8_t last_vel;                  /* the last note's velocity from the keys (Touch shows it) */
     uint8_t track;                     /* the sequencer track the Sequencer page edits */
     uint32_t btn, keys;
-    uint32_t enc_t[NE + (PLAT_SMK37 ? 1 : 0)];
+    uint32_t enc_t[NE];
     uint8_t kmode[NKEYS + (PLAT_SMK37 ? 10 : 0)], knotes[NKEYS + (PLAT_SMK37 ? 10 : 0)][3];
     uint8_t kn[NKEYS + (PLAT_SMK37 ? 10 : 0)];   /* per held key: how, which notes */
     uint32_t heard[4];                 /* notes held from MIDI in (any port), for the key lights */
@@ -1234,15 +1234,15 @@ static void input(void)
     }
 #if PLAT_SMK37
     for (i = 0; i < 4; i++) {
-        static const int roles[4] = {EN_K5, EN_SELECT, EN_ALGO, EN_PRESET};
-        e = plat_enc(roles[i]);
+        int role = EN_K5 + (int)i;
+        e = plat_enc(role);
         if (e && ui.view == V_PLAY) {
             int k;
             smk.knob_page = 1;
             if (ui.btn >> B_FX & 1u)
                 ui.fx_used = 1;
             k = view_knob((int)i);
-            knob_set(k, knob_get(k) + accel(roles[i], e, fx_cc() ? 119 : 127));
+            knob_set(k, knob_get(k) + accel(role, e, fx_cc() ? 119 : 127));
             ui.touched = (int8_t)i;
             ui.touch_until = plat_ms() + 1200u;
             ui.act_t = plat_ms();
