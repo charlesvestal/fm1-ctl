@@ -4,17 +4,19 @@
  * contract with fm1-base (device/unity.c, host/plat_host.c). */
 #pragma once
 #include <stdint.h>
+#if defined(PLAT_SMK37) && PLAT_SMK37
+#define APP_SMK_8ENC                    /* CTL uses all eight SMK encoders as calibrated roles */
+#endif
 #include "plat.h"
 #include "gm.h"
 
 #define APP_NAME "CTL-1"
 #define APP_TAGLINE "A MIDI controller for the FM-1"
 #define APP_BLOCK 256u                   /* the GM synth's block: 5.8 ms at 44.1 kHz */
-
 /* the store: the settings at 0xFC000 (Felucca's FL_GLOB), the panel calibration at 0xDC000, the Bluetooth stack's
  * syscfg (its address) at 0xDE000 */
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_BLE, OBJ_NOBJ };
-#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u}
+#define APP_STORE_MAP {PLAT_GLOB, 0xDC000u, 0xDE000u}
 
 /* MIDI routing beside plat.h's ports: Ctl sends through ctl_send (app.c), which also plays the onboard synth */
 #define TO_SYNTH (1u << 4)               /* the onboard GM synth (when Sound is on) */
@@ -67,6 +69,12 @@ typedef struct {
     int8_t at_sens;                      /* -5..+5: how far a lean goes for full aftertouch, 0 as measured */
     uint8_t ble_off;                     /* Bluetooth switched off (Setup, Bluetooth page); 0, the default: on */
     uint8_t rsv[9];                      /* room to grow */
+#if PLAT_SMK37
+    struct {
+        uint32_t magic;
+        uint8_t cc[NBANKS][4], val[NBANKS][4];
+    } smk;
+#endif
 } project_t;
 
 extern project_t proj;
@@ -103,7 +111,11 @@ void app_ui_init(void);
 void app_frame(void);
 void app_input_only(void);
 void app_say(const char *a, const char *b);
+#if PLAT_SMK37
+#define APP_GAIN(m) 4096u                /* K5 is a CC encoder; the synth's CC 7 controls volume */
+#else
 #define APP_GAIN(m) (proj.master_cc ? 4096u : (m) * (m) >> 12)   /* MASTER sends a controller: full; else the volume */
+#endif
 #define APP_BLE_AT_BOOT (!proj.ble_off)  /* Bluetooth at power-on: as the player left it */
 #define APP_TICK                         /* the clock, arpeggiator and sequencer (engine_tick) */
 void app_tick(void);

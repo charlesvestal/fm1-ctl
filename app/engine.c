@@ -33,6 +33,9 @@ static struct {
     uint8_t arp_note, arp_left;          /* the note on (0xFF none), ticks to its off */
     uint32_t rnd;
     volatile uint8_t mod_up;             /* LFO held */
+#if PLAT_SMK37
+    volatile uint8_t mod_base;           /* the physical wheel, restored when NOTE REPEAT is released */
+#endif
     uint8_t mod_sent, mod_wait;          /* the last value sent; ms until another may go */
     uint32_t mod_q;                      /* the mod wheel now, 0..127 << 16 */
 } eng = {.arp_note = 0xFF, .seq_note = {0xFF, 0xFF, 0xFF, 0xFF}, .rnd = 2463534242u};
@@ -225,7 +228,13 @@ static void clock_tick(void)                     /* one 24th of a beat */
 #define MOD_GAP 5u
 static void mod_tick(void)
 {
-    uint32_t target = eng.mod_up ? 127u << 16 : 0u, step = (127u << 16) * proj.tempo / 15000u, v;
+    uint32_t target = eng.mod_up ? 127u << 16 :
+#if PLAT_SMK37
+                      (uint32_t)eng.mod_base << 16,
+#else
+                      0u,
+#endif
+             step = (127u << 16) * proj.tempo / 15000u, v;
     if (eng.mod_q < target)
         eng.mod_q = target - eng.mod_q > step ? eng.mod_q + step : target;
     else if (eng.mod_q > target)
@@ -241,6 +250,19 @@ static void mod_tick(void)
 }
 void engine_mod(int up) { eng.mod_up = (uint8_t)(up != 0); }
 static int eng_mod_val(void) { return eng.mod_sent; }
+#if PLAT_SMK37
+static void engine_mod_wheel(uint8_t v)
+{
+    uint32_t f = plat_lock();
+    eng.mod_base = v;
+    if (!eng.mod_up) {
+        eng.mod_q = (uint32_t)v << 16;
+        eng.mod_sent = v;
+        eng_send(0xB0u | proj.chan, 1, v);
+    }
+    plat_unlock(f);
+}
+#endif
 
 void engine_tick(void)                           /* every millisecond (device: TIMER5 interrupt) */
 {

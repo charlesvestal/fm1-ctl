@@ -37,6 +37,7 @@ else
 fi
 run host-build sh build.sh --host
 run host-build-usb sh build.sh --host --no-ble
+run host-build-smk37 env FM1B_BOARD=smk37 FM1B_MODEL=pro sh build.sh --host
 if command -v emcc >/dev/null 2>&1; then
     run emu sh -c "sh build.sh --web && node tests/host/emu_test.mjs $B/emu/app.wasm"
     # fm1-base's page with CTL-1's bits, its worklet with the parts resample (in time at 48 kHz) and midi, and CTL-1's keys
@@ -53,6 +54,11 @@ for s in tests/scenarios/usb/*.ctl; do       # the build without Bluetooth: its 
     n=usb-$(basename "$s" .ctl)
     mkdir -p "$B/scenarios/$n"
     run "scenario-$n" $B/host/ctl-usb_host "$s" "$B/scenarios/$n"
+done
+for s in tests/scenarios/smk37/*.ctl; do
+    n=smk37-$(basename "$s" .ctl)
+    mkdir -p "$B/scenarios/$n"
+    run "scenario-$n" $B/host/ctl-smk37_host "$s" "$B/scenarios/$n"
 done
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

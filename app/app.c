@@ -10,13 +10,20 @@
 /* MIDI out: to the ports, and to the onboard synth (channel messages only: its queue is single-writer, and this
  * runs under the lock or in the tick; with Sound off no notes, but programs and controllers still set) */
 static volatile uint8_t in_tick;
+#if defined(PLAT_HOST) && PLAT_SMK37
+static uint32_t smk_host_trs_pkt;
+#endif
 void ctl_send(uint32_t pkt, uint32_t to)
 {
     uint32_t f = 0;
     if (!in_tick)
         f = plat_lock();
-    if (to & (TO_USB | TO_BLE))
-        plat_midi_send(pkt, to & (TO_USB | TO_BLE));
+#if defined(PLAT_HOST) && PLAT_SMK37
+    if (to & (TO_USB | TO_TRS))
+        smk_host_trs_pkt = pkt;
+#endif
+    if (to & (TO_USB | TO_BLE | TO_TRS))
+        plat_midi_send(pkt, to & (TO_USB | TO_BLE | TO_TRS));
     if ((to & TO_SYNTH) || ((to & (TO_USB | TO_BLE)) && !(to & TO_NOSYNTH))) {
         uint32_t st = (pkt >> 8) & 0xFFu;
         if (st >= 0x80u && st < 0xF0u && (proj.sound != SOUND_OFF || st >= 0xB0u))

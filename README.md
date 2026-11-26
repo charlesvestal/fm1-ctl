@@ -5,6 +5,10 @@ from the keys themselves, in any scale with its chords under the black keys; the
 Euclidean drum sequencer run on its clock. Everything goes out over USB and Bluetooth, MIDI from the TRS jack
 is passed along, and the FM-1 plays it all on its own General MIDI sounds too, so it works with nothing connected.
 
+An experimental SMK-37 build is also available from source for the Pro, Elite and MKE-P37. It uses all 37
+keys, pads, faders, wheels and sustain pedal; see [the SMK-37 controls](docs/MANUAL.md#smk-37). The base
+board support has not yet been confirmed on hardware. Do not install an FM-1 package on an SMK-37.
+
 ![The Play page](docs/img/screen-play.png) ![The Keys page](docs/img/screen-keys.png) ![The Sequencer page](docs/img/screen-seq.png)
 
 - **Try it in your browser** (no FM-1 needed): <https://charlesvestal.github.io/fm1-ctl/emu/>
@@ -52,6 +56,7 @@ CTL-1 is an app on [fm1-base](https://github.com/charlesvestal/fm1-base) (`base/
 sh tests/run_tests.sh                                  # the app in the simulator, the emulator, the update path
 ./build.sh                                             # app/build/ctl.fwsc
 ./build.sh --no-ble                                    # app/build/ctl-usb.fwsc: without Bluetooth
+./build.sh --board smk37 --model pro                 # app/build/ctl-smk37.fwsc
 python3 base/tools/fm1_install.py app/build/ctl.fwsc   # install it over USB
 ```
 

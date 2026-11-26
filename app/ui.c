@@ -76,7 +76,8 @@ static struct {
     uint8_t track;                     /* the sequencer track the Sequencer page edits */
     uint32_t btn, keys;
     uint32_t enc_t[NE];
-    uint8_t kmode[NKEYS], knotes[NKEYS][3], kn[NKEYS];   /* per held key: how, which notes */
+    uint8_t kmode[NKEYS + (PLAT_SMK37 ? 10 : 0)], knotes[NKEYS + (PLAT_SMK37 ? 10 : 0)][3];
+    uint8_t kn[NKEYS + (PLAT_SMK37 ? 10 : 0)];   /* per held key: how, which notes */
     uint32_t heard[4];                 /* notes held from MIDI in (any port), for the key lights */
     uint8_t playing;
     uint8_t sustain;
@@ -98,6 +99,18 @@ static struct {
     uint32_t frame;
     uint32_t sig[4];                   /* what each band shows: redrawn when it changes */
 } ui;
+
+#if PLAT_SMK37
+static struct {
+    uint64_t keys;
+    uint32_t pads, pad_keys;
+    uint8_t pad_ch[NPADS], pad_pressure[NPADS];
+    uint8_t fader_bank, fader[4];
+    uint8_t knob_page, globe_used;
+    uint64_t channel_keys;
+    int pitch, mod, pedal;
+} smk;
+#endif
 
 /* the screen reader (announce.c; the "screen reader" section below): what the key handlers did, said at the
  * next frame (text is built there, not in the handlers) */
@@ -233,11 +246,36 @@ static int key_black(int k)
 static int scale_note(int deg)
 {
     int len = SCALE_LEN[proj.scale];
-    return SCALE0_NOTE + proj.root + 12 * proj.octave + 12 * (deg / len) + SCALE_IV[proj.scale][deg % len];
+    int oct = deg / len, step = deg % len;
+    if (step < 0) {
+        step += len;
+        oct--;
+    }
+    return SCALE0_NOTE + proj.root + 12 * proj.octave + 12 * oct + SCALE_IV[proj.scale][step];
 }
 static int key_notes(int k, uint8_t *out)
 {
     int n = 0, i, w, v;
+#if PLAT_SMK37
+    if (k >= NKEYS) {
+        int physical = k < 32 ? k - NKEYS : k;
+        static const int8_t DEG[12] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};
+        static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+        int degree = physical / 12 * 7 + DEG[physical % 12] - 3;
+        if (!proj.scale) {
+            v = 48 + physical + 12 * proj.octave;
+            if (v >= 0 && v < 128)
+                out[n++] = (uint8_t)v;
+        } else {
+            for (i = 0; i < (BLACK[physical % 12] ? 3 : 1); i++) {
+                v = scale_note(degree + 2 * i);
+                if (v >= 0 && v < 128)
+                    out[n++] = (uint8_t)v;
+            }
+        }
+        return n;
+    }
+#endif
     if (!proj.scale) {
         v = KEY0_NOTE + k + 12 * proj.octave;
         if (v >= 0 && v < 128)
@@ -295,13 +333,27 @@ static void key_up(int k)
 static void all_keys_up(void)
 {
     int k;
-    for (k = 0; k < NKEYS; k++)
+    for (k = 0; k < NKEYS + (PLAT_SMK37 ? 10 : 0); k++)
         key_up(k);
 }
+
+#if PLAT_SMK37
+static void smk_pads_off(void)
+{
+    int i;
+    for (i = 0; i < NPADS; i++)
+        if (smk.pads >> i & 1u)
+            send(pkt3(0x80u | smk.pad_ch[i], 36u + (uint32_t)i, 0), TO_USB | TO_BLE);
+    smk.pads = 0;
+}
+#endif
 
 static void panic(void)
 {
     all_keys_up();
+#if PLAT_SMK37
+    smk_pads_off();
+#endif
     engine_panic();
     play(0xB0u, 64, 0);
     play(0xB0u, 123, 0);                 /* all notes off */
@@ -326,9 +378,18 @@ static void follow_cc(uint32_t num, uint32_t v)
                 mark_dirty();
                 ui.act_t = plat_ms();
             }
+#if PLAT_SMK37
+    for (b = 0; b < NBANKS; b++)
+        for (k = 0; k < 4; k++)
+            if (proj.smk.cc[b][k] == num && proj.smk.val[b][k] != v) {
+                proj.smk.val[b][k] = (uint8_t)v;
+                mark_dirty();
+                ui.act_t = plat_ms();
+            }
+#endif
 }
 
-static const uint32_t THRU[NPORTS] = {TO_BLE, TO_USB, TO_USB | TO_BLE};
+static const uint32_t THRU[NPORTS] = {TO_BLE | (PLAT_SMK37 ? TO_TRS : 0), TO_USB, TO_USB | TO_BLE};
 static void midi_in(void)
 {
     uint32_t pkt;
@@ -462,16 +523,19 @@ static uint32_t edge_vel(uint32_t k)
 /* what a knob edits: one of these */
 enum { K_VAL0, K_VAL1, K_VAL2, K_VAL3, K_CC0, K_CC1, K_CC2, K_CC3, K_ROOT, K_SCALE, K_VEL, K_HUMAN,
        K_AMODE, K_ARATE, K_AOCT, K_ARP, K_STEPS, K_HITS, K_ROT, K_NOTE, K_CLOCK, K_SEQCH, K_MASTER, K_GLOW,
-       K_TEMPO, K_SOUND, K_SNDIN, K_TOUCH, K_CURVE, K_ATM, K_ATS, K_DEV, K_BT, K_NONE };
+       K_TEMPO, K_SOUND, K_SNDIN, K_TOUCH, K_CURVE, K_ATM, K_ATS, K_DEV, K_BT,
+       K_EXTRA_VAL0, K_EXTRA_VAL1, K_EXTRA_VAL2, K_EXTRA_VAL3,
+       K_EXTRA_CC0, K_EXTRA_CC1, K_EXTRA_CC2, K_EXTRA_CC3, K_NONE };
 static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {K_VAL0, K_VAL1, K_VAL2, K_VAL3},
     {K_ROOT, K_SCALE, K_VEL, K_HUMAN},
     {K_ARP, K_AMODE, K_ARATE, K_AOCT},
     {K_STEPS, K_HITS, K_ROT, K_NOTE},
-    {K_SOUND, K_SNDIN, K_MASTER, K_NONE},
+    {K_SOUND, K_SNDIN, PLAT_SMK37 ? K_NONE : K_MASTER, K_NONE},
     {K_TEMPO, K_CLOCK, K_SEQCH, K_GLOW},
 };
-static const uint8_t TOUCH_KNOB[4] = {K_TOUCH, K_CURVE, K_ATM, K_ATS};   /* Setup's second page */
+static const uint8_t TOUCH_KNOB[4] = {K_TOUCH, PLAT_SMK37 ? K_NONE : K_CURVE,
+                                      PLAT_SMK37 ? K_NONE : K_ATM, PLAT_SMK37 ? K_NONE : K_ATS};
 /* Setup's third page (FM1B_BLE): a Bluetooth MIDI device (FM1B_BLE_CENTRAL), and Bluetooth on or off */
 static const uint8_t BT_KNOB[4] = {FM1B_BLE_CENTRAL ? K_DEV : K_NONE, K_NONE, K_NONE, K_BT};
 #define SETUP_PAGES (FM1B_BLE ? 3 : 2)
@@ -501,6 +565,10 @@ static int fx_cc(void)
 }
 static int view_knob(int i)
 {
+#if PLAT_SMK37
+    if (ui.view == V_PLAY && smk.knob_page)
+        return (fx_cc() ? K_EXTRA_CC0 : K_EXTRA_VAL0) + i;
+#endif
     if (fx_cc())
         return K_CC0 + i;
     if (ui.view == V_SETUP && ui.setup_pg == 2)   /* (a device only while Bluetooth runs) */
@@ -515,6 +583,12 @@ static void track_name(int n, char *b);
 
 static int knob_get(int k)
 {
+#if PLAT_SMK37
+    if (k >= K_EXTRA_VAL0 && k <= K_EXTRA_VAL3)
+        return proj.smk.val[proj.bank][k - K_EXTRA_VAL0];
+    if (k >= K_EXTRA_CC0 && k <= K_EXTRA_CC3)
+        return proj.smk.cc[proj.bank][k - K_EXTRA_CC0];
+#endif
     if (k <= K_VAL3)
         return proj.val[proj.bank][k - K_VAL0];
     if (k <= K_CC3)
@@ -551,6 +625,10 @@ static int knob_get(int k)
 static void knob_range(int k, int *lo, int *hi)
 {
     *lo = 0;
+    if (k >= K_EXTRA_VAL0 && k <= K_EXTRA_VAL3) {
+        *hi = 127;
+        return;
+    }
     switch (k) {
     case K_ROOT: *hi = 11; break;
     case K_SCALE: *hi = NSCALES - 1; break;
@@ -585,7 +663,13 @@ static void knob_name(int k, char *b)
         put_u(put_s(b, "CC "), proj.cc[proj.bank][k - K_VAL0]);
     else if (k <= K_CC3)
         put_u(put_s(b, "Knob "), (uint32_t)(k - K_CC0 + 1));
-    else if (k < K_NONE)
+    else if (k >= K_EXTRA_VAL0 && k <= K_EXTRA_VAL3) {
+#if PLAT_SMK37
+        put_u(put_s(b, "CC "), proj.smk.cc[proj.bank][k - K_EXTRA_VAL0]);
+#endif
+    } else if (k >= K_EXTRA_CC0 && k <= K_EXTRA_CC3)
+        put_u(put_s(b, "Knob "), (uint32_t)(k - K_EXTRA_CC0 + 5));
+    else if (k < K_EXTRA_VAL0)
         put_s(b, N[k - K_ROOT]);
     else
         b[0] = 0;
@@ -635,7 +719,9 @@ static void knob_text(int k, char *b)
         else
             put_u(b, (uint32_t)v);
         break;
-    case K_CC0: case K_CC1: case K_CC2: case K_CC3: put_u(put_s(b, "#"), (uint32_t)v); break;
+    case K_CC0: case K_CC1: case K_CC2: case K_CC3:
+    case K_EXTRA_CC0: case K_EXTRA_CC1: case K_EXTRA_CC2: case K_EXTRA_CC3:
+        put_u(put_s(b, "#"), (uint32_t)v); break;
     default: put_u(b, (uint32_t)v); break;
     }
 }
@@ -657,6 +743,14 @@ static void knob_set(int k, int v)
     v = v < lo ? lo : v > hi ? hi : v;
     if (v == knob_get(k))
         return;
+#if PLAT_SMK37
+    if (k >= K_EXTRA_VAL0 && k <= K_EXTRA_VAL3) {
+        proj.smk.val[proj.bank][k - K_EXTRA_VAL0] = (uint8_t)v;
+        cc(proj.smk.cc[proj.bank][k - K_EXTRA_VAL0], (uint32_t)v);
+    } else if (k >= K_EXTRA_CC0 && k <= K_EXTRA_CC3) {
+        proj.smk.cc[proj.bank][k - K_EXTRA_CC0] = (uint8_t)v;
+    } else
+#endif
     if (k <= K_VAL3) {
         proj.val[proj.bank][k - K_VAL0] = (uint8_t)v;
         cc(proj.cc[proj.bank][k - K_VAL0], (uint32_t)v);
@@ -788,6 +882,17 @@ static void button_down(int b)
         break;
     }
     case B_LFO: engine_mod(1); break;
+#if PLAT_SMK37
+    case B_KBANK: bank_to((proj.bank + 1) % NBANKS); break;
+    case B_FBANK: {
+        char name[2];
+        smk.fader_bank = (uint8_t)((smk.fader_bank + 1) % NBANKS);
+        name[0] = (char)('A' + smk.fader_bank);
+        name[1] = 0;
+        say("FADER BANK", name);
+        break;
+    }
+#endif
     case B_PLAY:
         ui.playing = (uint8_t)!ui.playing;
         engine_play(ui.playing);
@@ -813,7 +918,11 @@ static void button_up(int b)
 {
     switch (b) {
     case B_ENV:
-        if (ui.sus_lock)
+        if (ui.sus_lock
+#if PLAT_SMK37
+            || plat_pedal()
+#endif
+        )
             break;
         ui.sustain = 0;
         cc(64, 0);
@@ -829,7 +938,14 @@ static void button_up(int b)
     case B_SEQ: set_view(V_SEQ); break;
     case B_ARP: set_view(V_ARP); break;
     case B_EDIT: set_view(V_SOUND); break;
-    case B_GLO: set_view(V_SETUP); break;
+    case B_GLO:
+#if PLAT_SMK37
+        if (smk.globe_used) {
+            smk.globe_used = 0;
+            break;
+        }
+#endif
+        set_view(V_SETUP); break;
     case B_SAVE:
         if (ui.save_long)
             break;                       /* held: started Bluetooth, no save */
@@ -894,10 +1010,165 @@ static void master_pot(void)
     }
 }
 
+static void channel_to(int c)
+{
+    c = clamp(c, 0, 15);
+    if (c == proj.chan)
+        return;
+    all_keys_up();
+    engine_panic();
+#if PLAT_SMK37
+    if (ui.sustain)
+        play(0xB0u, 64, 0);
+    if (smk.pitch)
+        play(0xE0u, 0, 64);
+#endif
+    proj.chan = (uint8_t)c;
+    synth_program();
+#if PLAT_SMK37
+    if (ui.sustain)
+        play(0xB0u, 64, 127);
+    if (smk.pitch) {
+        uint32_t bend = (uint32_t)(smk.pitch + 8192);
+        play(0xE0u, bend & 127u, bend >> 7);
+    }
+    if (smk.mod)
+        engine_mod_wheel((uint8_t)smk.mod);
+#endif
+    mark_dirty();
+}
+
+static void program_step(int e)
+{
+    int p = clamp(proj.program + e, 0, 127);
+    if (p != proj.program) {
+        proj.program = (uint8_t)p;
+        play(0xC0u, (uint32_t)p, 0);
+        prog_name(put_s(put_u(ui.last, (uint32_t)p + 1u), " "), p);
+        mark_dirty();
+    }
+}
+
+#if PLAT_SMK37
+static void smk_input(void)
+{
+    uint64_t keys = plat_keys37(), pressed = plat_keys37_pressed(), retrig = plat_keys37_retrig();
+    uint64_t changed = keys ^ smk.keys;
+    uint32_t pads = plat_pads(), hits = plat_pads_pressed(), i;
+    for (i = 0; i < NKEYS37; i++) {
+        uint64_t bit = (uint64_t)1 << i;
+        int k = i < 5 ? (int)i + NKEYS : i < 32 ? (int)i - 5 : (int)i;
+        if ((changed | pressed | retrig) & bit) {
+            if (smk.channel_keys & bit) {
+                if (!(keys & bit))
+                    smk.channel_keys &= ~bit;
+                continue;
+            }
+            if (i < 16 && (plat_buttons() >> B_GLO & 1u) &&
+                ((pressed & bit) || ((keys & bit) && !(smk.keys & bit)))) {
+                smk.globe_used = 1;
+                if (smk.keys & bit)
+                    key_up(k);
+                if (keys & bit)
+                    smk.channel_keys |= bit;
+                channel_to((int)i);
+                continue;
+            }
+            if (!(keys & bit)) {
+                if ((pressed & bit) && !(smk.keys & bit) && ui.view != V_SEQ) {
+                    int vel = plat_key_vel((int)i);
+                    key_down(k, proj.touch && vel ? (uint32_t)vel : proj.vel);
+                }
+                key_up(k);
+            } else if (!(smk.keys & bit) || (retrig & bit)) {
+                if (retrig & bit)
+                    key_up(k);
+                if (ui.view == V_SEQ) {
+                    if (k < NKEYS)
+                        seq_key(k);
+                } else {
+                    int vel = plat_key_vel((int)i);
+                    if (vel)
+                        ui.last_vel = (uint8_t)vel;
+                    key_down(k, proj.touch && vel ? (uint32_t)vel : proj.vel);
+                }
+            }
+        }
+    }
+    smk.keys = keys;
+    ui.keys = (uint32_t)(keys >> 5) & ((1u << NKEYS) - 1u);
+    for (i = 0; i < NPADS; i++) {
+        uint32_t bit = 1u << i;
+        if ((hits & bit) || ((pads & bit) && !(smk.pad_keys & bit))) {
+            uint32_t vel = (uint32_t)plat_pad_vel((int)i);
+            if (smk.pads & bit)
+                send(pkt3(0x80u | smk.pad_ch[i], 36u + i, 0), TO_USB | TO_BLE);
+            smk.pad_ch[i] = proj.seq_ch;
+            smk.pad_pressure[i] = 0;
+            smk.pads |= bit;
+            send(pkt3(0x90u | smk.pad_ch[i], 36u + i, vel ? vel : 1u), TO_USB | TO_BLE);
+        }
+        if (!(pads & bit) && (smk.pads & bit)) {
+            send(pkt3(0x80u | smk.pad_ch[i], 36u + i, 0), TO_USB | TO_BLE);
+            smk.pads &= ~bit;
+        } else if (smk.pads & bit) {
+            int pressure = plat_pad_press((int)i);
+            if (pressure != smk.pad_pressure[i]) {
+                smk.pad_pressure[i] = (uint8_t)pressure;
+                send(pkt3(0xA0u | smk.pad_ch[i], 36u + i, (uint32_t)pressure), TO_USB | TO_BLE);
+            }
+        }
+        if ((pads ^ smk.pad_keys) & bit)
+            plat_pad_rgb((int)i, pads & bit ? 0xE5482Eu : 0x201008u);
+    }
+    smk.pad_keys = pads;
+    for (i = 0; i < 4; i++) {
+        int v = plat_fader((int)i);
+        if (v != smk.fader[i]) {
+            smk.fader[i] = (uint8_t)v;
+            cc(CC_DEFAULT[smk.fader_bank][i], (uint32_t)v);
+            follow_cc(CC_DEFAULT[smk.fader_bank][i], (uint32_t)v);
+            ui.act_t = plat_ms();
+        }
+    }
+    {
+        int pitch = plat_wheel(PLAT_WHEEL_PITCH), mod = plat_wheel(PLAT_WHEEL_MOD);
+        int pedal = plat_pedal();
+        if (pitch != smk.pitch) {
+            int v = pitch + 8192;
+            play(0xE0u, (uint32_t)v & 127u, (uint32_t)v >> 7);
+            smk.pitch = pitch;
+            ui.act_t = plat_ms();
+        }
+        if (mod != smk.mod) {
+            engine_mod_wheel((uint8_t)mod);
+            smk.mod = mod;
+            ui.act_t = plat_ms();
+        }
+        if (pedal != smk.pedal) {
+            smk.pedal = pedal;
+            if (pedal && !ui.sustain) {
+                ui.sustain = 1;
+                cc(64, 127);
+            } else if (!pedal && !(plat_buttons() >> B_ENV & 1u) && !ui.sus_lock && ui.sustain) {
+                ui.sustain = 0;
+                cc(64, 0);
+            }
+        }
+        if (changed || hits || pads || pedal)
+            ui.act_t = plat_ms();
+    }
+}
+#endif
+
 static void input(void)
 {
     uint32_t btn = plat_buttons(), keys = plat_keys(), ch, i;
     int32_t e;
+#if PLAT_SMK37
+    (void)keys;
+    smk_input();
+#else
     ch = keys ^ ui.keys;                 /* keys first: a note is the most urgent thing here */
     ui.keys = keys;
     for (i = 0; i < NKEYS; i++)
@@ -914,6 +1185,7 @@ static void input(void)
             }
         }
     touch_events();
+#endif
     ch = btn ^ ui.btn;
     ui.btn = btn;
     for (i = 0; i < NB; i++)
@@ -926,8 +1198,21 @@ static void input(void)
     if (btn || keys || ch)
         ui.act_t = plat_ms();
     midi_in();
+#if PLAT_SMK37
+    e = 0;
+    if (ch >> B_LEFT & 1u && btn >> B_LEFT & 1u)
+        e--;
+    if (ch >> B_RIGHT & 1u && btn >> B_RIGHT & 1u)
+        e++;
+    if (ui.view == V_PLAY) {
+        program_step(e);
+        e = 0;
+    }
+#else
     master_pot();
-    if ((e = plat_enc(EN_SELECT)) != 0) {        /* the page's pages, as X0X (the dots on the knob row) */
+    e = plat_enc(EN_SELECT);
+#endif
+    if (e != 0) {                        /* the page's pages, as X0X (the dots on the knob row) */
         int d = e > 0 ? 1 : -1;
         if (ui.view == V_PLAY && proj.bank + d >= 0 && proj.bank + d < NBANKS) {
             bank_to(proj.bank + d);
@@ -947,28 +1232,34 @@ static void input(void)
             say("BLUETOOTH", "STARTING");
         }
     }
-    if ((e = plat_enc(EN_ALGO)) != 0) {
-        int c = clamp(proj.chan + e, 0, 15);
-        if (c != proj.chan) {
-            all_keys_up();               /* held notes end on the channel they started on */
-            engine_panic();
-            proj.chan = (uint8_t)c;
-            synth_program();
-            mark_dirty();
+#if PLAT_SMK37
+    for (i = 0; i < 4; i++) {
+        int role = EN_K5 + (int)i;
+        e = plat_enc(role);
+        if (e && ui.view == V_PLAY) {
+            int k;
+            smk.knob_page = 1;
+            if (ui.btn >> B_FX & 1u)
+                ui.fx_used = 1;
+            k = view_knob((int)i);
+            knob_set(k, knob_get(k) + accel(role, e, fx_cc() ? 119 : 127));
+            ui.touched = (int8_t)i;
+            ui.touch_until = plat_ms() + 1200u;
+            ui.act_t = plat_ms();
         }
     }
-    if ((e = plat_enc(EN_PRESET)) != 0) {
-        int p = clamp(proj.program + e, 0, 127);
-        if (p != proj.program) {
-            proj.program = (uint8_t)p;
-            play(0xC0u, (uint32_t)p, 0);
-            prog_name(put_s(put_u(ui.last, (uint32_t)p + 1u), " "), p);
-            mark_dirty();
-        }
-    }
+#else
+    if ((e = plat_enc(EN_ALGO)) != 0)
+        channel_to(proj.chan + e);
+    if ((e = plat_enc(EN_PRESET)) != 0)
+        program_step(e);
+#endif
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
             int k, lo, hi;
+#if PLAT_SMK37
+            smk.knob_page = 0;
+#endif
             if (ui.btn >> B_FX & 1u)
                 ui.fx_used = 1;
             k = view_knob((int)i);
@@ -1251,19 +1542,19 @@ static void draw_ports(int32_t y0)
         if (!FM1B_BLE && p == PORT_BLE)
             continue;                    /* the USB-only build: USB and TRS */
         slot++;
-        int i = lit(p, 0), o = p < 2 && lit(p, 1);
+        int i = lit(p, 0), o = (p < 2 || PLAT_SMK37) && lit(p, 1);
         const char *st = "";
         uint16_t sc = K_DIM;
         cv_round(x, y0, 70, 34, 6, K_PANEL);
         cv_text(x + 8, y0 + 2, &FONT_S, PORT_NAME[p], K_TEXT);
         cv_round(x + 52, y0 + 5, 8, 8, 4, i ? K_COOL : K_LINE);   /* in */
-        if (p < 2)
+        if (p < 2 || PLAT_SMK37)
             cv_round(x + 52, y0 + 18, 8, 8, 4, o ? K_HOT : K_LINE);   /* out */
         if (p == PORT_BLE) {
             st = bt_status();                /* a computer, or a device */
             sc = st[0] == 'c' ? K_COOL_D : K_DIM;
         } else {
-            st = p == PORT_TRS ? "in only" : "";
+            st = p == PORT_TRS ? (PLAT_SMK37 ? "out only" : "in only") : "";
         }
         cv_text(x + 8, y0 + 18, &FONT_XS, st, sc);
     }
@@ -1383,6 +1674,14 @@ static void draw_touch(void)
     int32_t w;
     uint32_t k, top = 0;
     cv_text(10, 2, &FONT_S, "Touch", K_TEXT);
+    if (PLAT_SMK37) {
+        cv_text(10, 24, &FONT_XS, proj.touch ? "Velocity from the keys" : "Velocity fixed (Keys page)", K_DIM);
+        cv_text(10, 42, &FONT_XS, "KNOB 1 selects key or fixed velocity.", K_DIM);
+        cv_text(10, 60, &FONT_XS, "Keys do not send aftertouch.", K_DIM);
+        put_u(put_s(t, "Last velocity "), ui.last_vel);
+        cv_text(10, 78, &FONT_XS, t, K_DIM);
+        return;
+    }
     if (!touch_live) {
         cv_text(10, 24, &FONT_XS, "Every note plays at the Velocity", K_DIM);
         cv_text(10, 38, &FONT_XS, "set on Keys. KNOB 1: from the keys.", K_DIM);
@@ -1498,7 +1797,7 @@ static void draw_setup(void)                     /* the settings below; what the
         }
         cv_text(10, y, &FONT_XS, t, K_DIM);
     }
-    put_u(put_s(t, "TRS   in "), plat_midi_count(PORT_TRS, 0));
+    put_u(put_s(t, PLAT_SMK37 ? "TRS   out " : "TRS   in "), plat_midi_count(PORT_TRS, PLAT_SMK37 ? 1 : 0));
     cv_text(10, y + 16, &FONT_XS, t, K_DIM);
     cv_text(10, 72, &FONT_XS, "Settings save by themselves; SAVE: now.", K_DIM);
     cv_text(10, 88, &FONT_XS, "REC held at power-on: update mode.", K_DIM);
@@ -1520,7 +1819,7 @@ static void draw_sound(void)                     /* the onboard GM synth: what i
         put_u(put_s(t, "GM program "), p + 1u);
     cv_text(12, 22, &FONT_XS, t, K_DIM);
     cv_text(12, 46, &FONT_XS, proj.in_mute ? "Plays the keys (not MIDI in)" : "Plays the keys and MIDI in", K_DIM);
-    cv_text(12, 64, &FONT_XS, "PRESETS picks the sound.", K_DIM);
+    cv_text(12, 64, &FONT_XS, PLAT_SMK37 ? "PATCH, then < > picks the sound." : "PRESETS picks the sound.", K_DIM);
     put_s(put_u(put_s(put_u(put_s(t, "Voices "), gm_voices), "    CPU "), plat_cpu_pct()), "%");
     cv_text(12, 90, &FONT_XS, t, K_DIM);
 }
@@ -1564,7 +1863,8 @@ static void draw_main(void)
         h = hash(hash(h, 1u | ui.last_vel << 8 | top << 16), (uint32_t)touch_live | proj.touch << 1 | proj.at_mode << 2);
     } else if (ui.view == V_SETUP) {
         h = hash(hash(h, (uint32_t)proj.ble_off), plat_midi_count(PORT_BLE, 0) ^ plat_midi_count(PORT_BLE, 1) << 16);
-        h = hash(hash(h, plat_midi_count(PORT_USB, 0) ^ plat_midi_count(PORT_USB, 1) << 16), plat_midi_count(PORT_TRS, 0));
+        h = hash(hash(h, plat_midi_count(PORT_USB, 0) ^ plat_midi_count(PORT_USB, 1) << 16),
+                 plat_midi_count(PORT_TRS, PLAT_SMK37 ? 1 : 0));
     }
     if (h == ui.sig[1])
         return;
@@ -1619,8 +1919,15 @@ static void knob_tag(char *t, int *dots, int *cur)
         b[0] = ' ';
         b[1] = (char)('A' + proj.bank);
         b[2] = 0;
+#if PLAT_SMK37
+        put_s(b + 2, smk.knob_page ? " K5-8" : " K1-4");
+#endif
         if (fx_cc())
+#if PLAT_SMK37
+            put_s(b + 7, ": CC");
+#else
             put_s(b + 2, ": CC NUMBERS");
+#endif
         *dots = NBANKS;
         *cur = proj.bank;
     } else if (ui.view == V_SEQ) {
@@ -1640,7 +1947,11 @@ static void footer_text(const char **a, const char **b, const char **c)
 {
     *a = *b = *c = 0;
     switch (ui.view) {
-    case V_PLAY: *a = "SELECT, FX: BANK"; *b = "HOLD FX: SET CC"; *c = "ENV X2: SUS LOCK"; break;
+    case V_PLAY:
+        *a = PLAT_SMK37 ? "KBANK: BANK" : "SELECT, FX: BANK";
+        *b = "HOLD FX: SET CC";
+        *c = PLAT_SMK37 ? "< >: SOUND" : "ENV X2: SUS LOCK";
+        break;
     case V_SCALE:
         if (proj.scale) {
             *a = "WHITE: THE SCALE";
@@ -1650,11 +1961,11 @@ static void footer_text(const char **a, const char **b, const char **c)
         }
         break;
     case V_ARP: *a = "HOLD NOTES OR A CHORD"; *b = "KNOB 1: OFF, ON, LATCH"; break;
-    case V_SEQ: *a = "WHITE: STEPS"; *b = "SELECT, BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
-    case V_SOUND: *a = "PRESETS: THE SOUND"; *b = "MASTER: VOLUME"; break;
+    case V_SEQ: *a = "WHITE: STEPS"; *b = PLAT_SMK37 ? "< >, BLACK 1-4: TRACK" : "SELECT, BLACK 1-4: TRACK"; *c = "5-8: MUTE"; break;
+    case V_SOUND: *a = PLAT_SMK37 ? "PATCH, < >: SOUND" : "PRESETS: THE SOUND"; *b = PLAT_SMK37 ? "FADER 4: VOLUME" : "MASTER: VOLUME"; break;
     default:
         if (ui.setup_pg == 2) {
-            *a = "SELECT: SETUP";
+            *a = PLAT_SMK37 ? "< >: SETUP" : "SELECT: SETUP";
             if (bt_stopped())
                 *b = "SAVE: START BLUETOOTH";
             else if (FM1B_BLE_CENTRAL && !proj.ble_off && plat_ble_state() == BLE_READY) {
@@ -1664,12 +1975,12 @@ static void footer_text(const char **a, const char **b, const char **c)
             break;
         }
         if (ui.setup_pg) {
-            *a = "SELECT: SETUP";
-            *b = "CURVE +: FIRMER";
-            *c = "AT SENS +: LIGHTER";
+            *a = PLAT_SMK37 ? "< >: SETUP" : "SELECT: SETUP";
+            *b = PLAT_SMK37 ? 0 : "CURVE +: FIRMER";
+            *c = PLAT_SMK37 ? 0 : "AT SENS +: LIGHTER";
             break;
         }
-        *a = "SELECT: TOUCH";
+        *a = PLAT_SMK37 ? "< >: TOUCH" : "SELECT: TOUCH";
         *b = bt_stopped() ? "HOLD SAVE: BLUETOOTH" : "SAVE: NOW";
         break;
     }
@@ -1684,6 +1995,9 @@ static void draw_knobs(void)
 {
     uint32_t h = hash(2166136261u, ui.view | (uint32_t)ui.touched << 8 | proj.bank << 16 | ui.track << 20 |
                                        (uint32_t)fx_cc() << 24 | (uint32_t)ui.setup_pg << 25), i;
+#if PLAT_SMK37
+    h = hash(h, smk.knob_page);
+#endif
     int now_touch = plat_ms() < ui.touch_until, dots, cur = 0;
     char t[32];
     for (i = 0; i < 4; i++)
@@ -1801,7 +2115,11 @@ static void leds(void)
 static void autosave(void)
 {
     uint32_t now = plat_ms();
-    if (!ui.dirty || ui.btn || ui.keys || ui.playing || now - ui.act_t < AUTOSAVE_QUIET)
+    if (!ui.dirty || ui.btn || ui.keys || ui.playing || now - ui.act_t < AUTOSAVE_QUIET
+#if PLAT_SMK37
+        || smk.keys || smk.pad_keys || smk.pedal
+#endif
+    )
         return;
     if (project_save() == 0)
         ui.dirty = 0;
@@ -1873,6 +2191,13 @@ static void sp_knob(int k)                       /* a knob's readout: its name, 
 {
     char t[24];
     int v = knob_get(k), d;
+#if PLAT_SMK37
+    if (k >= K_EXTRA_VAL0 && k <= K_EXTRA_VAL3) {
+        sp_cat(sp_cc(proj.smk.cc[proj.bank][k - K_EXTRA_VAL0]) ? " " : " value ");
+        sp_num((uint32_t)v);
+        return;
+    }
+#endif
     if (k <= K_VAL3) {
         sp_cat(sp_cc(proj.cc[proj.bank][k - K_VAL0]) ? " " : " value ");
         sp_num((uint32_t)v);
@@ -1888,9 +2213,10 @@ static void sp_knob(int k)                       /* a knob's readout: its name, 
     }
     knob_name(k, t);
     sp_cat(t);
-    sp_cat(k <= K_CC3 ? ", " : " ");
+    sp_cat(k <= K_CC3 || (k >= K_EXTRA_CC0 && k <= K_EXTRA_CC3) ? ", " : " ");
     switch (k) {
-    case K_CC0: case K_CC1: case K_CC2: case K_CC3: sp_cc((uint32_t)v); return;
+    case K_CC0: case K_CC1: case K_CC2: case K_CC3:
+    case K_EXTRA_CC0: case K_EXTRA_CC1: case K_EXTRA_CC2: case K_EXTRA_CC3: sp_cc((uint32_t)v); return;
     case K_SCALE: sp_cat(SCALE_SAID[v]); return;
     case K_CLOCK: sp_cat(CLOCK_SAID[v]); return;
     case K_TOUCH: sp_cat(v ? "from the keys" : "fixed"); return;
@@ -1973,6 +2299,9 @@ static void sp_page(void)
     if (ui.view == V_PLAY) {
         sp_cat(", bank ");
         sp_cat(t);
+#if PLAT_SMK37
+        sp_cat(smk.knob_page ? ", knobs 5 to 8" : ", knobs 1 to 4");
+#endif
     } else if (ui.view == V_SEQ) {
         sp_cat(", track ");
         sp_num(ui.track + 1u);
@@ -2070,8 +2399,8 @@ static void sp_screen(int all)
         sp_num(plat_midi_count(PORT_USB, 0));
         sp_cat(", out ");
         sp_num(plat_midi_count(PORT_USB, 1));
-        sp_cat(". TRS in ");
-        sp_num(plat_midi_count(PORT_TRS, 0));
+        sp_cat(PLAT_SMK37 ? ". TRS out " : ". TRS in ");
+        sp_num(plat_midi_count(PORT_TRS, PLAT_SMK37 ? 1 : 0));
         sp_cat(". CTL-1 " APP_VERSION);
         break;
     default: break;
@@ -2108,6 +2437,10 @@ static void sp_screen(int all)
 static uint32_t sp_ctx_sig(void)
 {
     uint32_t h = hash(2166136261u, ui.view | (uint32_t)fx_cc() << 8);
+#if PLAT_SMK37
+    if (ui.view == V_PLAY)
+        h = hash(h, smk.knob_page);
+#endif
     if (ui.view == V_PLAY)
         h = hash(h, proj.bank);
     else if (ui.view == V_SEQ)
@@ -2386,6 +2719,16 @@ static void speak_dump(void)
 void ui_init(void)
 {
     memset(&ui, 0, sizeof ui);
+#if PLAT_SMK37
+    {
+        int i;
+        memset(&smk, 0, sizeof smk);
+        for (i = 0; i < 4; i++)
+            smk.fader[i] = (uint8_t)plat_fader(i);
+        for (i = 0; i < NPADS; i++)
+            plat_pad_rgb(i, 0x201008u);
+    }
+#endif
     ui.touched = -1;
     ui.master_sent = -1;
     ui.master_raw = (int32_t)plat_master();
